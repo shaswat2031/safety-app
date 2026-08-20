@@ -208,14 +208,6 @@ export default function ResponsePage() {
 
   // Selected Alert for Location Display
   const [selectedAlertId, setSelectedAlertId] = useState(null);
-
-  // Auto select first active alert if available
-  useEffect(() => {
-    if (activeEmergencies.length > 0 && !selectedAlertId) {
-      setSelectedAlertId(activeEmergencies[0].id);
-    }
-  }, [activeEmergencies, selectedAlertId]);
-
   const currentAlert = activeEmergencies.find((a) => a.id === selectedAlertId) || activeEmergencies[0];
 
   // Arrival Handler
@@ -234,41 +226,45 @@ export default function ResponsePage() {
     <div className="flex-1 max-w-6xl mx-auto w-full p-4 sm:p-6 space-y-6 bg-slate-50 min-h-screen">
       
       {/* Response Command Header */}
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
-            <ShieldAlert className="w-7 h-7 animate-pulse" />
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-xl text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
+            <ShieldAlert className="w-6 h-6 animate-pulse" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold text-white">
-                {profile?.full_name || "Capt. Vikram Singh"}
+              <h1 className="text-lg font-bold text-white">
+                {profile?.full_name || "QRF Emergency Responder"}
               </h1>
-              <span className="bg-amber-500/20 text-amber-300 text-xs px-2.5 py-0.5 rounded-full font-bold border border-amber-500/30">
-                Response Command (Role 3)
+              <span className="bg-amber-500/20 text-amber-300 text-[10px] px-2.5 py-0.5 rounded-full font-bold border border-amber-500/30 uppercase tracking-wider">
+                QRF Dispatch Unit
               </span>
             </div>
             <p className="text-xs text-slate-400 mt-0.5">
-              Live SOS Request Location & Route Navigation
+              Real-Time Navigation & Emergency Dispatch
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="bg-emerald-500/20 text-emerald-300 text-xs px-3 py-1 rounded-xl font-bold border border-emerald-500/30 flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-            {activeEmergencies.length} Active SOS Request{activeEmergencies.length !== 1 ? "s" : ""}
+          <span className={`text-xs px-3 py-1 rounded-xl font-bold border flex items-center gap-1.5 ${
+            activeEmergencies.length > 0
+              ? "bg-red-500/20 text-red-300 border-red-500/30"
+              : "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
+          }`}>
+            <span className={`w-2 h-2 rounded-full ${activeEmergencies.length > 0 ? "bg-red-500 animate-ping" : "bg-emerald-400 animate-pulse"}`}></span>
+            {activeEmergencies.length} Active Emergency{activeEmergencies.length !== 1 ? "s" : ""}
           </span>
         </div>
       </div>
 
       {/* Main Content Area */}
       {activeEmergencies.length === 0 ? (
-        <div className="p-16 text-center bg-white border border-slate-200 rounded-3xl space-y-3 shadow-xs">
-          <CheckCircle2 className="w-14 h-14 text-emerald-500 mx-auto" />
-          <h2 className="text-lg font-bold text-slate-900">No Active SOS Emergency Requests</h2>
+        <div className="p-12 text-center bg-white border border-slate-200 rounded-3xl space-y-2.5 shadow-xs">
+          <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto" />
+          <h2 className="text-base font-bold text-slate-900">All Sectors Safe & Operational</h2>
           <p className="text-xs text-slate-500 max-w-md mx-auto">
-            All sectors operating safely. When a worker presses SOS, their exact location and navigation route will automatically appear here.
+            No active SOS distress signals in queue. Workers are within safe parameters. Live GPS tracking active.
           </p>
         </div>
       ) : (
@@ -301,14 +297,14 @@ export default function ResponsePage() {
               {/* Header Info */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center font-bold">
+                  <div className="w-11 h-11 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center font-bold text-xs">
                     SOS
                   </div>
                   <div>
-                    <div className="text-xs font-black text-red-600 uppercase tracking-wider">
-                      DISTRESS SIGNAL LOCATION RECEIVED
+                    <div className="text-[10px] font-black text-red-600 uppercase tracking-wider">
+                      DISTRESS SIGNAL RECEIVED
                     </div>
-                    <h2 className="text-xl font-bold text-slate-900">
+                    <h2 className="text-lg font-bold text-slate-900">
                       {currentAlert.worker_name} ({currentAlert.employee_code})
                     </h2>
                   </div>
@@ -316,51 +312,51 @@ export default function ResponsePage() {
 
                 <div className="flex items-center gap-2">
                   <a
-                    href={`tel:${currentAlert.phone}`}
-                    className="px-3.5 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold rounded-xl border border-blue-200 flex items-center gap-1.5 transition-colors"
+                    href="tel:9265318481"
+                    className="px-3.5 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition-colors shadow-xs"
                   >
-                    <PhoneCall className="w-4 h-4 text-blue-600" />
-                    <span>Call Worker ({currentAlert.phone})</span>
+                    <PhoneCall className="w-4 h-4 text-white animate-pulse" />
+                    <span>Call Worker (9265318481)</span>
                   </a>
                 </div>
               </div>
 
               {/* Location & Worker Info Grid */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-200 text-xs">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-200 text-xs">
                 <div>
                   <span className="text-slate-400">Department</span>
                   <div className="font-bold text-slate-900 mt-0.5">{currentAlert.department}</div>
                 </div>
                 <div>
                   <span className="text-slate-400">Blood Group</span>
-                  <div className="font-bold text-red-600 mt-0.5">{currentAlert.blood_group}</div>
+                  <div className="font-bold text-red-600 mt-0.5">{currentAlert.blood_group || "O+"}</div>
                 </div>
                 <div>
                   <span className="text-slate-400">SOS Area Zone</span>
-                  <div className="font-bold text-slate-900 mt-0.5">{currentAlert.zone_name || "Location 1"}</div>
+                  <div className="font-bold text-slate-900 mt-0.5">{currentAlert.zone_name || "Plant Complex"}</div>
                 </div>
                 <div>
                   <span className="text-slate-400">Target GPS Lock</span>
                   <div className="font-mono text-slate-900 font-bold mt-0.5">
-                    {currentAlert.latitude.toFixed(4)}°, {currentAlert.longitude.toFixed(4)}°
+                    {currentAlert.latitude?.toFixed(4)}°, {currentAlert.longitude?.toFixed(4)}°
                   </div>
                 </div>
               </div>
 
               {/* Remarks */}
               <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-900 font-medium">
-                <strong className="font-bold">Distress Remarks:</strong> &quot;{currentAlert.remarks}&quot;
+                <strong className="font-bold">Distress Remarks:</strong> &quot;{currentAlert.remarks || "SOS Emergency Triggered"}&quot;
               </div>
 
-              {/* LIVE SOS LOCATION & ROUTE MAP (ONLY RESOLVE BUTTON ON ARRIVAL) */}
+              {/* LIVE SOS LOCATION & ROUTE MAP */}
               <div className="space-y-2">
                 <div className="text-xs font-bold text-slate-800 flex items-center justify-between">
                   <span className="flex items-center gap-1.5">
                     <MapPin className="w-4 h-4 text-red-600" />
-                    SOS Target Location Map & Navigation Route
+                    SOS Target Location & Navigation Route
                   </span>
                   <span className="text-slate-400 font-mono text-[10px]">
-                    GPS Fix: [{currentAlert.latitude.toFixed(4)}, {currentAlert.longitude.toFixed(4)}]
+                    GPS Fix: [{currentAlert.latitude?.toFixed(4)}, {currentAlert.longitude?.toFixed(4)}]
                   </span>
                 </div>
 
@@ -377,22 +373,26 @@ export default function ResponsePage() {
 
       {/* Resolved Archive Section */}
       {resolvedEmergencies.length > 0 && (
-        <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-3">
-          <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-            Resolved Emergency History ({resolvedEmergencies.length})
-          </h3>
-          <div className="space-y-2">
+        <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-xs space-y-3">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+            <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              Resolved Emergency History ({resolvedEmergencies.length})
+            </h3>
+          </div>
+          <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
             {resolvedEmergencies.map((alert) => (
               <div
                 key={alert.id}
-                className="p-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs flex items-center justify-between"
+                className="p-3 bg-slate-50 hover:bg-slate-100/80 border border-slate-200 rounded-2xl text-xs flex items-center justify-between transition-colors"
               >
-                <div>
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
                   <span className="font-bold text-slate-900">{alert.worker_name} ({alert.employee_code})</span>
-                  <span className="text-slate-500 ml-2">• Resolved on scene</span>
+                  <span className="text-slate-500 text-[11px] hidden sm:inline">• Resolved on scene</span>
                 </div>
-                <span className="text-emerald-700 font-bold bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200 text-[10px]">
-                  Resolved at {alert.resolved_at || alert.created_at}
+                <span className="text-emerald-700 font-bold bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200 text-[10px] font-mono">
+                  {alert.resolved_at || alert.created_at || "Resolved"}
                 </span>
               </div>
             ))}

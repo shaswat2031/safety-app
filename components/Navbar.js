@@ -207,16 +207,16 @@ export default function Navbar() {
         <div className="flex items-center gap-3">
           {isAuthenticated && profile && role ? (
             <>
-              {/* Two-Way Voice Call Speed Button (Hidden in Command Center) */}
+              {/* Direct 2-Way Voice Call Link (No Popup, Direct 9265318481) */}
               {role !== "command_operator" && pathname !== "/command" && (
-                <button
-                  onClick={() => setIsCallModalOpen(true)}
-                  className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-xs sm:text-sm font-bold transition-colors shadow-xs"
-                  title="Two-Way Emergency Comms"
+                <a
+                  href="tel:9265318481"
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs sm:text-sm font-bold transition-colors shadow-xs"
+                  title="Direct Call Emergency Hotline: 9265318481"
                 >
-                  <PhoneCall className="w-4 h-4 text-red-600" />
-                  <span className="hidden sm:inline">2-Way Comms (SIM)</span>
-                </button>
+                  <PhoneCall className="w-4 h-4 text-white animate-pulse" />
+                  <span>Call 9265318481</span>
+                </a>
               )}
 
               {/* User Profile & Logout */}
@@ -252,74 +252,6 @@ export default function Navbar() {
           )}
         </div>
       </div>
-
-      {/* Two-Way Voice Call Speed Dial Modal */}
-      {isCallModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 w-full max-w-sm rounded-3xl p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <PhoneCall className="w-4 h-4 text-red-600" />
-                Two-Way Voice Calling (SIM)
-              </h3>
-              <button
-                onClick={() => setIsCallModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 font-bold text-xs"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="space-y-2.5">
-              <a
-                href="tel:108"
-                className="p-3 bg-red-50 hover:bg-red-100 border border-red-200 rounded-2xl flex items-center justify-between transition-colors"
-              >
-                <div>
-                  <div className="text-xs font-bold text-red-900">Vedanta Emergency 108 Hotline</div>
-                  <div className="text-[10px] text-red-700">Immediate Medical & Fire Dispatch</div>
-                </div>
-                <span className="text-xs font-black text-red-600 bg-white px-2 py-1 rounded-lg">
-                  Dial 108
-                </span>
-              </a>
-
-              <a
-                href="tel:+919876511223"
-                className="p-3 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-2xl flex items-center justify-between transition-colors"
-              >
-                <div>
-                  <div className="text-xs font-bold text-purple-900">Control Room (Priya Sharma)</div>
-                  <div className="text-[10px] text-purple-700">Direct Command Dispatch Desk</div>
-                </div>
-                <span className="text-xs font-bold text-purple-600 bg-white px-2 py-1 rounded-lg">
-                  Dial SIM
-                </span>
-              </a>
-
-              <a
-                href="tel:+919876599887"
-                className="p-3 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-2xl flex items-center justify-between transition-colors"
-              >
-                <div>
-                  <div className="text-xs font-bold text-amber-900">QRF Ambulance (Capt. Vikram)</div>
-                  <div className="text-[10px] text-amber-700">Quick Response Vehicle Radio / SIM</div>
-                </div>
-                <span className="text-xs font-bold text-amber-600 bg-white px-2 py-1 rounded-lg">
-                  Dial SIM
-                </span>
-              </a>
-            </div>
-
-            <button
-              onClick={() => setIsCallModalOpen(false)}
-              className="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl"
-            >
-              Close Dialer
-            </button>
-          </div>
-        </div>
-      )}
     </header>
   );
 }

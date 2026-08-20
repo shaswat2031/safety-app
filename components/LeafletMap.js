@@ -96,7 +96,7 @@ export default function LeafletMap({
       <div className="absolute top-3 left-3 z-[10] bg-white/95 backdrop-blur-md border border-slate-200 px-3.5 py-2 rounded-2xl shadow-md flex items-center gap-3 text-xs">
         <div className="flex items-center gap-2 font-bold text-slate-800">
           <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-          <span>Vedanta Mining GIS (mapcn UI)</span>
+          <span>Vedanta GIS Map</span>
         </div>
         <div className="text-[11px] text-slate-500 border-l border-slate-200 pl-3 hidden sm:flex items-center gap-3">
           <span>Active Staff: <strong className="text-slate-800">{workers.length}</strong></span>
@@ -107,114 +107,19 @@ export default function LeafletMap({
             </span>
           )}
         </div>
-        <button
-          onClick={() => setShow25kmCircle(!show25kmCircle)}
-          className={`ml-2 px-2.5 py-1 rounded-xl text-[11px] font-bold border transition-colors flex items-center gap-1.5 cursor-pointer ${
-            show25kmCircle
-              ? "bg-indigo-50 text-indigo-700 border-indigo-300"
-              : "bg-slate-100 text-slate-600 border-slate-200"
-          }`}
-          title="Toggle 25km Color-Coordinated Accuracy Circles"
-        >
-          <span>🎯 25km Accuracy Radar</span>
-          <span className={`w-2 h-2 rounded-full ${show25kmCircle ? "bg-indigo-600" : "bg-slate-400"}`}></span>
-        </button>
       </div>
 
       {/* Map Legend Overlay */}
-      <div className="absolute bottom-3 right-3 z-[10] bg-white/95 backdrop-blur-md border border-slate-200 p-3 rounded-2xl shadow-md text-xs flex flex-col gap-1.5 max-w-xs">
-        <div className="flex items-center justify-between font-bold text-slate-800 text-[10px] uppercase tracking-wider">
-          <span>Map & Accuracy Layers</span>
-          <button
-            onClick={() => setShowRadarModal(!showRadarModal)}
-            className="text-[10px] text-indigo-600 font-bold underline hover:text-indigo-800"
-          >
-            {showRadarModal ? "Hide Report" : "Accuracy Report"}
-          </button>
+      <div className="absolute bottom-3 right-3 z-[10] bg-white/95 backdrop-blur-md border border-slate-200 p-2.5 rounded-2xl shadow-md text-xs flex items-center gap-3">
+        <div className="flex items-center gap-1.5 text-slate-700 text-[11px] font-medium">
+          <span className="w-2.5 h-2.5 rounded-full bg-blue-600 border border-white shadow-xs"></span>
+          <span>GPS Position</span>
         </div>
-        
-        {/* User GPS & 25km Color Coordination Legend */}
-        <div className="flex items-center gap-2 text-slate-700 text-[11px]">
-          <span className="w-3 h-3 rounded-full bg-blue-600 border border-white shadow-xs"></span> My GPS Location (Blue Dot)
-        </div>
-
-        {show25kmCircle && (
-          <div className="border-t border-slate-100 pt-1.5 space-y-1">
-            <div className="text-[10px] font-bold text-slate-500 uppercase">25km Accuracy Circumference</div>
-            <div className="flex items-center gap-2 text-emerald-700 font-medium text-[10px]">
-              <span className="w-3 h-3 rounded-full bg-emerald-500/40 border border-emerald-600"></span> 0 - 5km: High Accuracy (99% Fix)
-            </div>
-            <div className="flex items-center gap-2 text-amber-700 font-medium text-[10px]">
-              <span className="w-3 h-3 rounded-full bg-amber-500/30 border border-amber-600"></span> 5 - 15km: Standard Buffer (90% Fix)
-            </div>
-            <div className="flex items-center gap-2 text-indigo-700 font-medium text-[10px]">
-              <span className="w-3 h-3 rounded-full bg-indigo-500/20 border border-indigo-600"></span> 15 - 25km: Outer Boundary (75% Fix)
-            </div>
-          </div>
-        )}
-
-        <div className="flex items-center gap-2 text-slate-700 text-[11px]">
-          <span className="w-3 h-3 rounded bg-blue-600 flex items-center justify-center text-[9px] text-white">🚑</span> QRF Ambulance Unit
+        <div className="flex items-center gap-1.5 text-slate-700 text-[11px] font-medium border-l border-slate-200 pl-3">
+          <span className="w-2.5 h-2.5 rounded bg-blue-600 text-white text-[8px] flex items-center justify-center font-bold">🚑</span>
+          <span>QRF Ambulance</span>
         </div>
       </div>
-
-      {/* Accuracy & Precision Analysis Report Overlay */}
-      {showRadarModal && (
-        <div className="absolute top-16 left-3 z-[20] bg-white/95 backdrop-blur-md border border-indigo-200 p-4 rounded-2xl shadow-xl text-xs max-w-sm space-y-2.5 animate-in fade-in zoom-in-95">
-          <div className="flex items-center justify-between border-b border-indigo-100 pb-2">
-            <h4 className="font-bold text-slate-900 flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-indigo-600 animate-ping"></span>
-              25km Circumference & Accuracy Analysis
-            </h4>
-            <button
-              onClick={() => setShowRadarModal(false)}
-              className="text-slate-400 hover:text-slate-600 font-bold"
-            >
-              ✕
-            </button>
-          </div>
-
-          <div className="text-[11px] text-slate-600 leading-relaxed space-y-2">
-            <p>
-              <strong>Kidahr Jada Accurate Hota Hai? (High Precision Breakdown):</strong>
-            </p>
-            
-            <div className="bg-emerald-50 border border-emerald-200 p-2 rounded-xl text-emerald-900 space-y-0.5">
-              <div className="font-bold flex items-center gap-1.5 text-xs text-emerald-700">
-                <span>🎯 0 - 5 km Zone (Most Accurate & Proper)</span>
-              </div>
-              <p className="text-[10px] text-emerald-800">
-                <strong>Accuracy: 99% (±5m - ±10m error margin).</strong> Direct High-Precision GPS Lock with dual-band GNSS. Best for instant pin-point emergency QRF dispatch.
-              </p>
-            </div>
-
-            <div className="bg-amber-50 border border-amber-200 p-2 rounded-xl text-amber-900 space-y-0.5">
-              <div className="font-bold flex items-center gap-1.5 text-xs text-amber-700">
-                <span>📡 5 - 15 km Zone (Standard Operational)</span>
-              </div>
-              <p className="text-[10px] text-amber-800">
-                <strong>Accuracy: 90% (±15m - ±30m error margin).</strong> Hybrid GPS + Cell Tower Triangulation. Reliable for ongoing field worker telemetry.
-              </p>
-            </div>
-
-            <div className="bg-indigo-50 border border-indigo-200 p-2 rounded-xl text-indigo-900 space-y-0.5">
-              <div className="font-bold flex items-center gap-1.5 text-xs text-indigo-700">
-                <span>🌐 15 - 25 km Zone (25km Circumference Edge)</span>
-              </div>
-              <p className="text-[10px] text-indigo-800">
-                <strong>Accuracy: 75% - 80% (±50m error margin).</strong> Extended circumference outer perimeter limit for regional safety coverage & hazard warnings.
-              </p>
-            </div>
-          </div>
-
-          <div className="bg-slate-50 p-2 rounded-xl border border-slate-200 flex items-center justify-between text-[11px]">
-            <span className="text-slate-500 font-medium">My GPS Sensor Status:</span>
-            <span className="font-bold text-emerald-600 font-mono">
-              {myLocation ? `±${Math.round(myLocation.accuracy)}m Fix` : "Acquiring..."}
-            </span>
-          </div>
-        </div>
-      )}
 
       {/* shadcn / mapcn Map Component */}
       <Map center={mapCenter} zoom={zoom} theme="light" className="w-full h-full">

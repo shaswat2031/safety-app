@@ -358,16 +358,27 @@ export function SafetyProvider({ children }) {
     }
   }, [saveState]);
 
+  // Continuous 5-Second Real-Time Live Polling for All Panels & Components
   useEffect(() => {
     let isMounted = true;
+
     const fetchLive = async () => {
       if (isMounted) {
         await loadRealDataFromSupabase();
       }
     };
+
+    // Initial fetch on mount
     fetchLive();
+
+    // 5-Second automatic live polling interval
+    const intervalId = setInterval(() => {
+      fetchLive();
+    }, 5000);
+
     return () => {
       isMounted = false;
+      clearInterval(intervalId);
     };
   }, [loadRealDataFromSupabase]);
 
@@ -382,13 +393,33 @@ export function SafetyProvider({ children }) {
   }, [sosAlerts, isSirenMuted]);
 
   // Update Worker GPS in memory and Supabase worker_locations table
-  const updateWorkerLocation = (workerId, lat, lng, speed = 0, heading = 0) => {
+  const updateWorkerLocation = (workerId, lat, lng, speed = 0, heading = 0, profileData = null) => {
+    if (!workerId || lat == null || lng == null) return;
     const evaluation = evaluateGeofence([lat, lng], zones);
 
     setWorkers((prev) => {
       const exists = prev.some((w) => w.id === workerId);
       if (!exists) {
-        return prev;
+        const newWorker = {
+          id: workerId,
+          name: profileData?.full_name || profileData?.name || "Field Worker",
+          code: profileData?.employee_code || profileData?.code || "VED-MN",
+          department: profileData?.department || "Operations",
+          phone: profileData?.phone || "+91 98765 00000",
+          blood_group: profileData?.blood_group || "O+",
+          lat,
+          lng,
+          speed,
+          heading,
+          battery: 88,
+          is_sos_active: false,
+          zone: evaluation.zoneName,
+          zone_type: evaluation.breachType || "safe",
+          last_ping: "Just now",
+        };
+        const updated = [...prev, newWorker];
+        saveState(STORAGE_KEYS.WORKERS, updated);
+        return updated;
       }
 
       const updated = prev.map((w) => {
@@ -403,6 +434,9 @@ export function SafetyProvider({ children }) {
           }
           return {
             ...w,
+            name: profileData?.full_name || w.name,
+            code: profileData?.employee_code || w.code,
+            department: profileData?.department || w.department,
             lat,
             lng,
             speed,

@@ -41,16 +41,16 @@ import { toast } from "sonner";
 const EMERGENCY_CONTACTS = [
   {
     id: "ec-1",
-    name: "Vedanta Emergency Hotline",
-    role: "National Emergency",
-    number: "108",
+    name: "Control Room Hotline",
+    role: "Direct Emergency Desk",
+    number: "9265318481",
     color: "red",
   },
   {
     id: "ec-2",
-    name: "Control Room Desk",
-    role: "Command Operator",
-    number: "+919876511223",
+    name: "Vedanta Emergency",
+    role: "National Helpline",
+    number: "108",
     color: "purple",
   },
   {
@@ -129,15 +129,35 @@ export default function WorkerPage() {
   const [isActivating, setIsActivating] = useState(false);
   const countdownRef = useRef(null);
 
-  const [coords, setCoords] = useState({ lat: 0, lng: 0 });
-  const [accuracy, setAccuracy] = useState(null);
+  /* default site coords fallback */
+  const DEFAULT_SITE_COORDS = { lat: 19.711355, lng: 83.398825 };
+  const [coords, setCoords] = useState(DEFAULT_SITE_COORDS);
+  const [accuracy, setAccuracy] = useState(10);
   const [speed, setSpeed] = useState(0);
   const [heading, setHeading] = useState(0);
   const [address, setAddress] = useState("Acquiring location…");
   const [battery, setBattery] = useState(null);
   const [batteryCharging, setBatteryCharging] = useState(false);
-  const [gpsReady, setGpsReady] = useState(false); // true only after first real fix
-  const [gpsType, setGpsType] = useState("acquiring");
+  const [gpsReady, setGpsReady] = useState(false);
+  const [gpsType, setGpsType] = useState("acquiring"); // 'hardware' | 'network' | 'site_default' | 'acquiring' | 'unavailable'
+
+  const zonesRef = useRef(zones);
+  const profileRef = useRef(profile);
+  const updateWorkerLocationRef = useRef(updateWorkerLocation);
+  const lastGeocodeTimeRef = useRef(0);
+  const lastGeocodeCoordsRef = useRef(null);
+
+  useEffect(() => {
+    zonesRef.current = zones;
+  }, [zones]);
+
+  useEffect(() => {
+    profileRef.current = profile;
+  }, [profile]);
+
+  useEffect(() => {
+    updateWorkerLocationRef.current = updateWorkerLocation;
+  }, [updateWorkerLocation]);
 
   const [zoneStatus, setZoneStatus] = useState({
     zoneName: "Acquiring location…",
@@ -188,14 +208,25 @@ export default function WorkerPage() {
             b.removeEventListener("chargingchange", update);
           };
         })
-        .catch(() => setBattery(null)); // not supported — show N/A
+        .catch(() => setBattery(null));
     } else {
-      setBattery(null); // iOS / unsupported — show N/A
+      setBattery(null);
     }
   }, []);
 
-  /* ── reverse geocode helper ── */
+  /* ── reverse geocode helper (throttled) ── */
   const reverseGeocode = useCallback(async (lat, lng) => {
+    const now = Date.now();
+    if (lastGeocodeCoordsRef.current) {
+      const dLat = Math.abs(lat - lastGeocodeCoordsRef.current.lat);
+      const dLng = Math.abs(lng - lastGeocodeCoordsRef.current.lng);
+      if (now - lastGeocodeTimeRef.current < 15000 && dLat < 0.0005 && dLng < 0.0005) {
+        return;
+      }
+    }
+    lastGeocodeTimeRef.current = now;
+    lastGeocodeCoordsRef.current = { lat, lng };
+
     try {
       const res = await fetch(
         `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
@@ -203,52 +234,101 @@ export default function WorkerPage() {
       );
       const data = await res.json();
       if (data?.display_name) {
-        // Shorten: "Road, Area, City, State" — skip country/postcode
         const parts = data.display_name.split(",").map((s) => s.trim());
         const short = parts.slice(0, 3).join(", ");
         setAddress(short);
       }
     } catch {
-      // keep previous address on failure
+      // keep previous address
     }
   }, []);
 
-  /* ── GPS watch ── */
-  const onGPSSuccess = useCallback(
-    (pos) => {
+  /* ── position handler ── */
+  const handlePositionUpdate = useCallback(
+    (pos, source = "hardware") => {
       const lat = pos.coords.latitude;
       const lng = pos.coords.longitude;
       const spd = pos.coords.speed != null ? Math.round(pos.coords.speed * 3.6) : 0;
       const hdg = pos.coords.heading != null ? Math.round(pos.coords.heading) : 0;
-      const acc = pos.coords.accuracy != null ? Math.round(pos.coords.accuracy) : null;
+      const acc = pos.coords.accuracy != null ? Math.round(pos.coords.accuracy) : 10;
+
       setCoords({ lat, lng });
       setSpeed(spd);
       setHeading(hdg);
       setAccuracy(acc);
-      setGpsType("hardware");
+      setGpsType(source);
       setGpsReady(true);
-      const zone = evaluateGeofence([lat, lng], zones);
+
+      const zone = evaluateGeofence([lat, lng], zonesRef.current || []);
       setZoneStatus(zone);
       reverseGeocode(lat, lng);
-      if (profile?.id) updateWorkerLocation(profile.id, lat, lng, spd, hdg);
+
+      const currentProfile = profileRef.current;
+      if (currentProfile?.id && updateWorkerLocationRef.current) {
+        updateWorkerLocationRef.current(currentProfile.id, lat, lng, spd, hdg, currentProfile);
+      }
     },
-    [zones, profile, updateWorkerLocation, reverseGeocode]
+    [reverseGeocode]
   );
 
+  /* ── GPS watch & initial position ── */
   useEffect(() => {
-    if (!navigator.geolocation) { setGpsType("unavailable"); setGpsReady(true); return; }
+    if (typeof window === "undefined" || !navigator.geolocation) {
+      setGpsType("site_default");
+      setGpsReady(true);
+      return;
+    }
+
+    let watchId = null;
+    let fallbackWatchId = null;
     setGpsType("acquiring");
-    const id = navigator.geolocation.watchPosition(
-      onGPSSuccess,
+
+    // Initial fix attempt (High accuracy first, then fallback to network)
+    navigator.geolocation.getCurrentPosition(
+      (pos) => handlePositionUpdate(pos, "hardware"),
+      (err1) => {
+        console.warn("High accuracy initial location failed, trying network positioning:", err1.message);
+        navigator.geolocation.getCurrentPosition(
+          (pos) => handlePositionUpdate(pos, "network"),
+          (err2) => {
+            console.warn("Network initial location failed:", err2.message);
+            setGpsType("site_default");
+            setGpsReady(true);
+          },
+          { enableHighAccuracy: false, timeout: 10000, maximumAge: 30000 }
+        );
+      },
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 10000 }
+    );
+
+    // Continuous location tracking
+    watchId = navigator.geolocation.watchPosition(
+      (pos) => handlePositionUpdate(pos, "hardware"),
       (err) => {
-        console.warn("GPS watch error:", err.message);
-        setGpsType("unavailable");
-        setGpsReady(true); // stop "Acquiring…" even on failure
+        console.warn("High accuracy watchPosition error, falling back to network watch:", err.message);
+        if (watchId !== null) {
+          navigator.geolocation.clearWatch(watchId);
+          watchId = null;
+        }
+
+        fallbackWatchId = navigator.geolocation.watchPosition(
+          (pos) => handlePositionUpdate(pos, "network"),
+          (fallbackErr) => {
+            console.warn("Network watchPosition failed:", fallbackErr.message);
+            setGpsType((prev) => (prev === "hardware" || prev === "network" ? prev : "site_default"));
+            setGpsReady(true);
+          },
+          { enableHighAccuracy: false, timeout: 15000, maximumAge: 10000 }
+        );
       },
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
     );
-    return () => navigator.geolocation.clearWatch(id);
-  }, [onGPSSuccess]);
+
+    return () => {
+      if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+      if (fallbackWatchId !== null) navigator.geolocation.clearWatch(fallbackWatchId);
+    };
+  }, [handlePositionUpdate]);
 
   const recalibrateGPS = () => {
     if (!navigator.geolocation) {
@@ -256,18 +336,31 @@ export default function WorkerPage() {
       return;
     }
     toast.loading("Acquiring GPS lock…", { id: "gps" });
+
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        onGPSSuccess(pos);
+        handlePositionUpdate(pos, "hardware");
         toast.success(
           `GPS locked ±${pos.coords.accuracy != null ? Math.round(pos.coords.accuracy) : "?"}m`,
           { id: "gps" }
         );
       },
       (err) => {
-        toast.info("GPS unavailable — check location permissions.", { id: "gps" });
-        setGpsType("unavailable");
-        setGpsReady(true);
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            handlePositionUpdate(pos, "network");
+            toast.success(
+              `Network location acquired ±${pos.coords.accuracy != null ? Math.round(pos.coords.accuracy) : "?"}m`,
+              { id: "gps" }
+            );
+          },
+          (err2) => {
+            toast.info("Using plant site default coordinates.", { id: "gps" });
+            setGpsType("site_default");
+            setGpsReady(true);
+          },
+          { enableHighAccuracy: false, timeout: 8000, maximumAge: 0 }
+        );
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
@@ -380,7 +473,7 @@ export default function WorkerPage() {
       {/* ── TOP BAR ── */}
       <div className="bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between sticky top-0 z-40 shadow-sm">
         <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white font-black text-sm shrink-0">
+          <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white font-black text-sm shrink-0 shadow-sm">
             {profile?.full_name?.charAt(0)?.toUpperCase() || "W"}
           </div>
           <div>
@@ -388,15 +481,15 @@ export default function WorkerPage() {
               {profile?.full_name || "Worker"}
             </div>
             <div className="text-[11px] text-slate-500 font-mono leading-tight">
-              {profile?.employee_code} · {profile?.department}
+              {profile?.employee_code || "VED-MN"} {profile?.department ? `· ${profile.department}` : ""}
             </div>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          {/* online badge */}
+          {/* status badge */}
           <div
-            className={`flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold border ${
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold border ${
               isOnline
                 ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                 : "bg-amber-50 text-amber-700 border-amber-200"
@@ -411,18 +504,19 @@ export default function WorkerPage() {
             onClick={toggleSirenMute}
             className={`p-2 rounded-xl border transition-colors ${
               isSirenMuted
-                ? "bg-slate-100 border-slate-200 text-slate-500"
-                : "bg-red-50 border-red-200 text-red-600"
+                ? "bg-slate-100 border-slate-200 text-slate-500 hover:bg-slate-200"
+                : "bg-red-50 border-red-200 text-red-600 animate-pulse"
             }`}
-            title={isSirenMuted ? "Siren muted — tap to unmute" : "Siren ON — tap to mute"}
+            title={isSirenMuted ? "Unmute Alarm" : "Mute Alarm"}
           >
             {isSirenMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
           </button>
 
-          {/* profile */}
+          {/* profile trigger */}
           <button
             onClick={() => setShowProfile(true)}
             className="p-2 rounded-xl bg-slate-100 border border-slate-200 text-slate-600 hover:bg-slate-200 transition-colors"
+            title="My Profile"
           >
             <User className="w-4 h-4" />
           </button>
@@ -433,51 +527,52 @@ export default function WorkerPage() {
       <div className={`mx-3 mt-3 rounded-2xl border px-3.5 py-2.5 flex items-center gap-2.5 ${zoneColorClass}`}>
         <span className="text-base leading-none">{zoneIcon}</span>
         <div className="flex-1 min-w-0">
-          <div className="text-xs font-black truncate">{zoneStatus.zoneName}</div>
-          <div className="text-[11px] opacity-80 mt-0.5 truncate">
+          <div className="text-xs font-black truncate">
+            {zoneStatus.zoneName === "Acquiring location…" ? "Detecting Zone…" : zoneStatus.zoneName}
+          </div>
+          <div className="text-[11px] opacity-80 mt-0.5 truncate font-medium">
             {zoneStatus.breachType === "hazard"
-              ? "Blast Hazard Zone — Full PPE mandatory"
+              ? "Hazard Area — PPE Mandatory"
               : zoneStatus.breachType === "restricted"
-              ? "Restricted Area — Authorised personnel only"
-              : "Safe Assembly Zone"}
+              ? "Restricted Access — Authorized Only"
+              : "Safe Operational Zone"}
           </div>
         </div>
       </div>
 
-      {/* ── SOS PANEL ── */}
+      {/* ── SOS MAIN PANEL ── */}
       <div className="flex-1 flex flex-col items-center justify-center px-4 py-6 gap-5">
-
         {myActiveSOS ? (
-          /* ─ ACTIVE SOS SCREEN ─ */
+          /* ─ ACTIVE SOS STATE ─ */
           <div className="w-full max-w-sm bg-white border-2 border-red-500 rounded-3xl p-5 space-y-4 shadow-2xl shadow-red-200">
             <div className="flex flex-col items-center gap-2 pt-1">
-              <div className="w-16 h-16 rounded-full bg-red-600 flex items-center justify-center shadow-xl animate-bounce">
-                <ShieldAlert className="w-8 h-8 text-white" />
+              <div className="w-14 h-14 rounded-full bg-red-600 flex items-center justify-center shadow-xl animate-bounce">
+                <ShieldAlert className="w-7 h-7 text-white" />
               </div>
               <div className="text-[11px] font-black uppercase tracking-wider text-red-600">
-                SOS BROADCAST ACTIVE
+                EMERGENCY ALERT ACTIVE
               </div>
               <div className="text-base font-black text-slate-900 text-center">
-                Central Command Alerted
+                Command Center Alerted
               </div>
             </div>
 
-            {/* response steps */}
+            {/* status steps */}
             <div className="bg-slate-50 rounded-2xl p-3 space-y-2 border border-slate-100">
               <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
-                Live Response Status
+                Response Status
               </div>
 
               {[
-                { label: "Panic alarm received by server", done: true },
+                { label: "Distress signal broadcasted", done: true },
                 {
                   label: "Acknowledged by Command Desk",
                   done: ["acknowledged", "dispatched"].includes(myActiveSOS.status),
                 },
                 {
                   label: myActiveSOS.dispatched_to
-                    ? `En Route: ${myActiveSOS.dispatched_to}`
-                    : "QRF Unit Dispatch",
+                    ? `QRF En Route: ${myActiveSOS.dispatched_to}`
+                    : "QRF Dispatching",
                   done: myActiveSOS.status === "dispatched",
                   pulse: myActiveSOS.status === "dispatched",
                 },
@@ -523,26 +618,23 @@ export default function WorkerPage() {
           </div>
         ) : isActivating ? (
           /* ─ COUNTDOWN SCREEN ─ */
-          <div className="w-full max-w-sm bg-white border-2 border-red-500 rounded-3xl p-8 text-center space-y-4 shadow-2xl">
+          <div className="w-full max-w-sm bg-white border-2 border-red-500 rounded-3xl p-7 text-center space-y-4 shadow-2xl">
             <div className="text-7xl font-black text-red-600 tabular-nums animate-pulse">
               {countdown}
             </div>
             <div className="text-sm font-bold text-slate-800">
-              Sending SOS in {countdown} second{countdown !== 1 ? "s" : ""}…
+              Broadcasting SOS in {countdown}s…
             </div>
-            <p className="text-xs text-slate-500">
-              Tap cancel if this was an accidental press.
-            </p>
             <button
               onClick={cancelSOS}
               className="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-sm rounded-2xl border border-slate-200 transition-colors"
             >
-              ✕ Cancel — Accidental Tap
+              Cancel SOS
             </button>
           </div>
         ) : (
-          /* ─ NORMAL SOS BUTTON ─ */
-          <div className="flex flex-col items-center gap-4">
+          /* ─ NORMAL SOS TRIGGER BUTTON ─ */
+          <div className="flex flex-col items-center gap-3">
             <div className="relative">
               <div className="absolute -inset-4 rounded-full bg-red-500/20 animate-ping" />
               <div className="absolute -inset-8 rounded-full bg-red-400/10 animate-pulse" />
@@ -554,12 +646,12 @@ export default function WorkerPage() {
                 <AlertOctagon className="w-14 h-14 animate-pulse" />
                 <span className="text-4xl font-black tracking-widest">SOS</span>
                 <span className="text-[11px] font-bold uppercase tracking-widest opacity-90">
-                  Hold to Activate
+                  Press to Activate
                 </span>
               </button>
             </div>
-            <p className="text-center text-xs text-slate-500 max-w-[240px] leading-relaxed">
-              Broadcasts your GPS location, medical info, and triggers alarm at Command Center.
+            <p className="text-center text-xs text-slate-500 max-w-[220px] font-medium leading-tight mt-1">
+              Broadcasts live GPS location & alerts Command Center.
             </p>
           </div>
         )}
@@ -573,6 +665,8 @@ export default function WorkerPage() {
               className={`w-2 h-2 rounded-full ${
                 gpsType === "hardware"
                   ? "bg-emerald-500 animate-pulse"
+                  : gpsType === "network"
+                  ? "bg-blue-500 animate-pulse"
                   : gpsType === "acquiring"
                   ? "bg-amber-400 animate-ping"
                   : "bg-slate-400"
@@ -581,8 +675,18 @@ export default function WorkerPage() {
             <span className="text-[11px] font-black uppercase tracking-wider text-slate-700">
               Live Telemetry
             </span>
-            <span className="text-[10px] text-slate-400 capitalize">
-              ({gpsType === "hardware" ? "GPS" : gpsType === "acquiring" ? "Acquiring…" : "Fallback"})
+            <span className="text-[10px] text-slate-500 font-medium">
+              (
+              {gpsType === "hardware"
+                ? "Hardware GPS"
+                : gpsType === "network"
+                ? "Network Location"
+                : gpsType === "site_default"
+                ? "Plant Site Default"
+                : gpsType === "acquiring"
+                ? "Acquiring Lock…"
+                : "Fallback"}
+              )
             </span>
           </div>
           <button
@@ -593,12 +697,20 @@ export default function WorkerPage() {
           </button>
         </div>
 
+        {/* Address subtext */}
+        {address && address !== "Acquiring location…" && (
+          <div className="text-[11px] font-semibold text-slate-600 mb-2 truncate flex items-center gap-1 bg-slate-50 border border-slate-100 px-2 py-1 rounded-lg">
+            <MapPin className="w-3 h-3 text-red-500 shrink-0" />
+            <span className="truncate">{address}</span>
+          </div>
+        )}
+
         <div className="grid grid-cols-4 gap-2 text-center">
           {[
             { icon: <Navigation className="w-3.5 h-3.5 text-blue-500" />, label: "Lat", val: coords.lat.toFixed(5) },
             { icon: <Navigation className="w-3.5 h-3.5 text-blue-500 rotate-90" />, label: "Lng", val: coords.lng.toFixed(5) },
-            { icon: <MapPin className="w-3.5 h-3.5 text-emerald-500" />, label: "Accuracy", val: `±${accuracy}m` },
-            { icon: <BatteryCharging className="w-3.5 h-3.5 text-emerald-500" />, label: "Battery", val: `${battery}%` },
+            { icon: <MapPin className="w-3.5 h-3.5 text-emerald-500" />, label: "Accuracy", val: accuracy != null ? `±${accuracy}m` : "—" },
+            { icon: <BatteryCharging className="w-3.5 h-3.5 text-emerald-500" />, label: "Battery", val: battery != null ? `${battery}%` : "—" },
           ].map((item) => (
             <div key={item.label} className="bg-slate-50 rounded-xl p-2 border border-slate-100">
               <div className="flex items-center justify-center mb-0.5">{item.icon}</div>
@@ -611,47 +723,47 @@ export default function WorkerPage() {
 
       {/* ── BOTTOM ACTION BUTTONS ── */}
       <div className="mx-3 mb-4 grid grid-cols-3 gap-2.5">
-        {/* 2-Way Call */}
+        {/* Voice Call */}
         <button
           onClick={() => setShowCall(true)}
-          className="flex flex-col items-center gap-2 p-3.5 bg-white border border-slate-200 rounded-2xl shadow-sm hover:bg-slate-50 transition-colors active:scale-95"
+          className="flex flex-col items-center gap-2 p-3 bg-white border border-slate-200 rounded-2xl shadow-sm hover:bg-slate-50 transition-colors active:scale-95"
         >
           <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center">
             <PhoneCall className="w-5 h-5 text-red-600" />
           </div>
           <span className="text-[11px] font-bold text-slate-800 text-center leading-tight">
-            2-Way<br />Voice Call
+            Emergency<br />Call
           </span>
         </button>
 
         {/* Report Incident */}
         <button
           onClick={() => setShowReport(true)}
-          className="flex flex-col items-center gap-2 p-3.5 bg-white border border-slate-200 rounded-2xl shadow-sm hover:bg-slate-50 transition-colors active:scale-95"
+          className="flex flex-col items-center gap-2 p-3 bg-white border border-slate-200 rounded-2xl shadow-sm hover:bg-slate-50 transition-colors active:scale-95"
         >
           <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center">
             <Camera className="w-5 h-5 text-amber-600" />
           </div>
           <span className="text-[11px] font-bold text-slate-800 text-center leading-tight">
-            Report<br />Incident
+            Report<br />Hazard
           </span>
         </button>
 
-        {/* I Am Safe */}
+        {/* Check-In Safe */}
         <button
           onClick={safeCheckIn}
-          className="flex flex-col items-center gap-2 p-3.5 bg-white border border-slate-200 rounded-2xl shadow-sm hover:bg-slate-50 transition-colors active:scale-95"
+          className="flex flex-col items-center gap-2 p-3 bg-white border border-slate-200 rounded-2xl shadow-sm hover:bg-slate-50 transition-colors active:scale-95"
         >
           <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center">
             <CheckCircle2 className="w-5 h-5 text-emerald-600" />
           </div>
           <span className="text-[11px] font-bold text-slate-800 text-center leading-tight">
-            I Am<br />Safe
+            Check-In<br />Safe
           </span>
         </button>
       </div>
 
-      {/* ════════ MODAL: 2-Way Voice Call ════════ */}
+      {/* ════════ MODAL: Voice Call ════════ */}
       {showCall && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="bg-white w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden">
@@ -662,8 +774,8 @@ export default function WorkerPage() {
                   <PhoneCall className="w-4 h-4 text-red-600" />
                 </div>
                 <div>
-                  <div className="text-sm font-black text-slate-900">2-Way Voice Calling</div>
-                  <div className="text-[11px] text-slate-500">Tap to open SIM dialler</div>
+                  <div className="text-sm font-black text-slate-900">Emergency Contacts</div>
+                  <div className="text-[11px] text-slate-500">Tap to call directly</div>
                 </div>
               </div>
               <button
@@ -682,10 +794,10 @@ export default function WorkerPage() {
                   <a
                     key={c.id}
                     href={`tel:${c.number}`}
-                    className={`flex items-center gap-3 p-3.5 rounded-2xl border ${cv.bg} ${cv.border} transition-all active:scale-98 group`}
+                    className={`flex items-center gap-3 p-3 rounded-2xl border ${cv.bg} ${cv.border} transition-all active:scale-98 group`}
                   >
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${cv.icon}`}>
-                      <PhoneIncoming className="w-5 h-5" />
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${cv.icon}`}>
+                      <PhoneIncoming className="w-4 h-4" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className={`text-sm font-black ${cv.text} truncate`}>{c.name}</div>
@@ -698,17 +810,16 @@ export default function WorkerPage() {
                 );
               })}
 
-              {/* worker's own emergency contact from profile */}
               {profile?.emergency_contact && (
                 <a
                   href={`tel:${profile.emergency_contact}`}
-                  className="flex items-center gap-3 p-3.5 rounded-2xl border bg-slate-50 border-slate-200 transition-all active:scale-98"
+                  className="flex items-center gap-3 p-3 rounded-2xl border bg-slate-50 border-slate-200 transition-all active:scale-98"
                 >
-                  <div className="w-10 h-10 rounded-xl bg-slate-200 flex items-center justify-center shrink-0">
-                    <User className="w-5 h-5 text-slate-600" />
+                  <div className="w-9 h-9 rounded-xl bg-slate-200 flex items-center justify-center shrink-0">
+                    <User className="w-4 h-4 text-slate-600" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-black text-slate-800">My Emergency Contact</div>
+                    <div className="text-sm font-black text-slate-800">Emergency Contact</div>
                     <div className="text-[11px] text-slate-500 font-mono">{profile.emergency_contact}</div>
                   </div>
                   <div className="px-3 py-1.5 rounded-xl text-xs font-black bg-slate-700 hover:bg-slate-800 text-white shrink-0 shadow-sm">
@@ -721,7 +832,7 @@ export default function WorkerPage() {
             <div className="px-4 pb-5">
               <button
                 onClick={() => setShowCall(false)}
-                className="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm rounded-2xl transition-colors"
+                className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm rounded-xl transition-colors"
               >
                 Close
               </button>
@@ -741,9 +852,9 @@ export default function WorkerPage() {
                   <Camera className="w-4 h-4 text-amber-600" />
                 </div>
                 <div>
-                  <div className="text-sm font-black text-slate-900">Report Hazard / Incident</div>
+                  <div className="text-sm font-black text-slate-900">Report Hazard</div>
                   <div className="text-[11px] text-slate-500">
-                    GPS: {coords.lat.toFixed(4)}°, {coords.lng.toFixed(4)}°
+                    Tagged at {coords.lat.toFixed(4)}°, {coords.lng.toFixed(4)}°
                   </div>
                 </div>
               </div>
@@ -766,10 +877,10 @@ export default function WorkerPage() {
                   <input
                     type="text"
                     required
-                    placeholder="e.g. Gas smell near conveyor unit 4"
+                    placeholder="e.g. Gas leak near Conveyor Unit 4"
                     value={reportData.title}
                     onChange={(e) => setReportData({ ...reportData, title: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 focus:border-transparent"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent"
                   />
                 </div>
 
@@ -782,13 +893,13 @@ export default function WorkerPage() {
                       onChange={(e) => setReportData({ ...reportData, category: e.target.value })}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none"
                     >
-                      <option value="fire">🔥 Fire / Smoke</option>
-                      <option value="gas_leak">💨 Gas / Toxic Leak</option>
-                      <option value="machinery">⚙️ Machinery Fault</option>
-                      <option value="fall">🪜 Slip / Fall</option>
-                      <option value="near_miss">⚠️ Near Miss</option>
-                      <option value="chemical">🧪 Chemical Spill</option>
-                      <option value="electrical">⚡ Electrical Hazard</option>
+                      <option value="fire">Fire / Smoke</option>
+                      <option value="gas_leak">Gas / Toxic Leak</option>
+                      <option value="machinery">Machinery Fault</option>
+                      <option value="fall">Slip / Fall</option>
+                      <option value="near_miss">Near Miss</option>
+                      <option value="chemical">Chemical Spill</option>
+                      <option value="electrical">Electrical Hazard</option>
                     </select>
                   </div>
                   <div className="space-y-1">
@@ -798,10 +909,10 @@ export default function WorkerPage() {
                       onChange={(e) => setReportData({ ...reportData, severity: e.target.value })}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none"
                     >
-                      <option value="low">🟢 Low</option>
-                      <option value="medium">🟡 Medium</option>
-                      <option value="high">🟠 High</option>
-                      <option value="critical">🔴 Critical</option>
+                      <option value="low">Low</option>
+                      <option value="medium">Medium</option>
+                      <option value="high">High</option>
+                      <option value="critical">Critical</option>
                     </select>
                   </div>
                 </div>
@@ -814,10 +925,10 @@ export default function WorkerPage() {
                   <textarea
                     rows={3}
                     required
-                    placeholder="Describe what you saw. Include location, equipment involved, and any injuries…"
+                    placeholder="Describe what you observed, location details, and immediate actions taken…"
                     value={reportData.description}
                     onChange={(e) => setReportData({ ...reportData, description: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-red-400 focus:border-transparent"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent"
                   />
                 </div>
 
@@ -855,9 +966,6 @@ export default function WorkerPage() {
                         <div className="text-xs font-bold text-slate-600">
                           Tap to capture photo or video
                         </div>
-                        <div className="text-[11px] text-slate-400">
-                          Stored in Supabase · tagged at {coords.lat.toFixed(4)}°, {coords.lng.toFixed(4)}°
-                        </div>
                       </div>
                     )}
                   </div>
@@ -876,12 +984,12 @@ export default function WorkerPage() {
                 <button
                   type="submit"
                   disabled={uploading}
-                  className="py-3 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white font-bold text-sm rounded-2xl flex items-center justify-center gap-2 shadow-md transition-colors"
+                  className="py-3 bg-amber-600 hover:bg-amber-700 disabled:opacity-60 text-white font-bold text-sm rounded-2xl flex items-center justify-center gap-2 shadow-md transition-colors"
                 >
                   {uploading ? (
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   ) : (
-                    <><Send className="w-4 h-4" /> Submit</>
+                    <><Send className="w-4 h-4" /> Submit Report</>
                   )}
                 </button>
               </div>
@@ -896,7 +1004,7 @@ export default function WorkerPage() {
           <div className="bg-white w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden">
             {/* header */}
             <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-slate-100">
-              <div className="text-sm font-black text-slate-900">My Profile</div>
+              <div className="text-sm font-black text-slate-900">Worker Profile</div>
               <button
                 onClick={() => setShowProfile(false)}
                 className="w-8 h-8 flex items-center justify-center rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 transition-colors"
@@ -908,14 +1016,14 @@ export default function WorkerPage() {
             <div className="p-5 space-y-3">
               {/* avatar + name */}
               <div className="flex items-center gap-3 pb-3 border-b border-slate-100">
-                <div className="w-14 h-14 rounded-2xl bg-blue-600 flex items-center justify-center text-white font-black text-2xl">
+                <div className="w-14 h-14 rounded-2xl bg-blue-600 flex items-center justify-center text-white font-black text-2xl shadow-sm">
                   {profile?.full_name?.charAt(0)?.toUpperCase() || "W"}
                 </div>
                 <div>
                   <div className="text-base font-black text-slate-900">{profile?.full_name}</div>
                   <div className="text-xs text-slate-500 mt-0.5">
                     <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full font-bold text-[11px]">
-                      Worker
+                      Field Worker
                     </span>
                   </div>
                 </div>
@@ -928,7 +1036,7 @@ export default function WorkerPage() {
                 { icon: <Building2 className="w-4 h-4 text-slate-400" />, label: "Department", val: profile?.department },
                 { icon: <Phone className="w-4 h-4 text-slate-400" />, label: "Phone", val: profile?.phone },
                 { icon: <PhoneCall className="w-4 h-4 text-slate-400" />, label: "Emergency Contact", val: profile?.emergency_contact || "—" },
-                { icon: <Droplet className="w-4 h-4 text-red-400" />, label: "Blood Group", val: profile?.blood_group },
+                { icon: <Droplet className="w-4 h-4 text-red-500" />, label: "Blood Group", val: profile?.blood_group },
               ].map((row) => (
                 <div key={row.label} className="flex items-center gap-3">
                   <div className="w-7 h-7 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center shrink-0">
@@ -945,7 +1053,7 @@ export default function WorkerPage() {
             <div className="px-5 pb-5">
               <button
                 onClick={() => setShowProfile(false)}
-                className="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm rounded-2xl transition-colors"
+                className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm rounded-xl transition-colors"
               >
                 Close
               </button>

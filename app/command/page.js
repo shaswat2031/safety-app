@@ -295,7 +295,7 @@ export default function CommandPage() {
           <div className="flex items-center gap-2.5">
             <span className="w-3 h-3 rounded-full bg-red-600 animate-ping"></span>
             <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-              Central Command Center
+              Command Center
             </h1>
             <span className="bg-slate-900 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
               {role ? role.replace("_", " ") : "Operator"}
@@ -303,30 +303,39 @@ export default function CommandPage() {
           </div>
           <p className="text-xs text-slate-500 mt-1 flex items-center gap-2">
             <Factory className="w-3.5 h-3.5 text-slate-400" />
-            Vedanta Smelter & Mining Complex • Real-Time Safety & Location Intelligence System
+            Vedanta Smelter & Mining Complex
           </p>
         </div>
 
         {/* Global Action Bar */}
         <div className="flex items-center gap-2 flex-wrap">
           <button
-            onClick={() => setNotificationEnabled(!notificationEnabled)}
-            className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
-              notificationEnabled
-                ? "bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200"
-                : "bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200"
-            }`}
-          >
-            {notificationEnabled ? <BellRing className="w-4 h-4" /> : <Bell className="w-4 h-4" />}
-            <span>{notificationEnabled ? "Audio On" : "Muted"}</span>
-          </button>
-
-          <button
             onClick={handleSyncDatabase}
             className="px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
           >
             <RefreshCw className="w-4 h-4 text-blue-600" />
-            <span>Sync Live DB</span>
+            <span>Sync DB</span>
+          </button>
+
+          <button
+            onClick={toggleSirenMute}
+            className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+              isSirenMuted
+                ? "bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200"
+                : "bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 animate-pulse"
+            }`}
+          >
+            {isSirenMuted ? (
+              <>
+                <VolumeX className="w-4 h-4 text-amber-600" />
+                <span>Unmute Siren</span>
+              </>
+            ) : (
+              <>
+                <Volume2 className="w-4 h-4 text-red-600" />
+                <span>Mute Siren</span>
+              </>
+            )}
           </button>
 
           {canPerformAction("export_audit") && (
@@ -335,7 +344,7 @@ export default function CommandPage() {
               className="px-3 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
             >
               <Download className="w-4 h-4 text-purple-600" />
-              <span>Export Audit</span>
+              <span>Export Report</span>
             </button>
           )}
 
@@ -363,30 +372,13 @@ export default function CommandPage() {
               <span>{isEquipmentShutdown ? "Shutdown Active" : "Emergency Stop"}</span>
             </button>
           )}
-
-          <button
-            onClick={toggleSirenMute}
-            className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
-          >
-            {isSirenMuted ? (
-              <>
-                <VolumeX className="w-4 h-4 text-amber-600" />
-                <span>Unmute Siren</span>
-              </>
-            ) : (
-              <>
-                <Volume2 className="w-4 h-4 text-red-600 animate-pulse" />
-                <span>Mute Audio</span>
-              </>
-            )}
-          </button>
         </div>
       </div>
 
       {/* KPI Metric Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <div
-          className={`p-4 rounded-2xl border transition-all ${
+          className={`p-3.5 rounded-2xl border transition-all ${
             criticalCount > 0
               ? "bg-red-50 border-red-300 shadow-sm shadow-red-500/10"
               : "bg-white border-slate-200 shadow-xs"
@@ -400,26 +392,26 @@ export default function CommandPage() {
             {criticalCount}
           </div>
           <div className="text-[10px] text-slate-500 mt-0.5 font-medium">
-            {criticalCount > 0 ? "⚠️ Immediate Action" : "All Sectors Clear"}
+            {criticalCount > 0 ? "Action Required" : "Sectors Clear"}
           </div>
         </div>
 
-        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs">
+        <div className="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-xs">
           <div className="flex items-center justify-between text-xs text-slate-500 font-semibold">
-            <span>Live GPS Staff</span>
+            <span>Active Staff</span>
             <Users className="w-4 h-4 text-blue-600" />
           </div>
           <div className="text-2xl font-black text-slate-900 mt-1">
             {workers.length}
           </div>
           <div className="text-[10px] text-emerald-600 font-bold mt-0.5">
-            ● 100% Signal Connected
+            Connected
           </div>
         </div>
 
-        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs">
+        <div className="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-xs">
           <div className="flex items-center justify-between text-xs text-slate-500 font-semibold">
-            <span>Active Geofences</span>
+            <span>Safety Zones</span>
             <Layers className="w-4 h-4 text-amber-600" />
           </div>
           <div className="text-2xl font-black text-slate-900 mt-1">
@@ -430,7 +422,7 @@ export default function CommandPage() {
           </div>
         </div>
 
-        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs">
+        <div className="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-xs">
           <div className="flex items-center justify-between text-xs text-slate-500 font-semibold">
             <span>Avg Response</span>
             <Clock className="w-4 h-4 text-emerald-600" />
@@ -439,13 +431,13 @@ export default function CommandPage() {
             {analytics.avgResponseTime} <span className="text-xs font-normal text-slate-500">mins</span>
           </div>
           <div className="text-[10px] text-slate-500 mt-0.5 font-medium">
-            SLA Target: &lt; 3.0 mins
+            Target &lt; 3m
           </div>
         </div>
 
-        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs">
+        <div className="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-xs">
           <div className="flex items-center justify-between text-xs text-slate-500 font-semibold">
-            <span>Safety Index</span>
+            <span>Safety Score</span>
             <Shield className="w-4 h-4 text-indigo-600" />
           </div>
           <div
@@ -460,13 +452,13 @@ export default function CommandPage() {
             {analytics.safetyScore}%
           </div>
           <div className="text-[10px] text-slate-500 mt-0.5 font-medium">
-            Composite Score
+            Optimal State
           </div>
         </div>
 
-        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs">
+        <div className="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-xs">
           <div className="flex items-center justify-between text-xs text-slate-500 font-semibold">
-            <span>Total Incidents</span>
+            <span>Incidents</span>
             <FileText className="w-4 h-4 text-purple-600" />
           </div>
           <div className="text-2xl font-black text-slate-900 mt-1">
@@ -481,10 +473,10 @@ export default function CommandPage() {
       {/* Main Command Navigation Tabs */}
       <div className="flex items-center gap-1 bg-white p-1 rounded-2xl border border-slate-200 shadow-xs overflow-x-auto">
         {[
-          { id: "monitoring", label: "Live Monitoring & Map", icon: RadioTower, count: null },
-          { id: "workers", label: "Staff & Personnel Tracking", icon: Users, count: workers.length },
-          { id: "zones", label: "Geofence Boundaries", icon: Layers, count: zones.length },
-          { id: "analytics", label: "Analytics & Historical Audits", icon: BarChart3, count: null },
+          { id: "monitoring", label: "Live Map", icon: RadioTower, count: null },
+          { id: "workers", label: "Staff Tracking", icon: Users, count: workers.length },
+          { id: "zones", label: "Safety Zones", icon: Layers, count: zones.length },
+          { id: "analytics", label: "Analytics & Audits", icon: BarChart3, count: null },
         ].map((tab) => {
           const Icon = tab.icon;
           return (
@@ -601,7 +593,7 @@ export default function CommandPage() {
                         </span>
                       </div>
                       <div className="text-red-700 font-bold mt-1 text-[11px] bg-red-100/50 p-1.5 rounded-lg border border-red-200">
-                        "{alert.remarks || "SOS Emergency Panic Triggered"}"
+                        &quot;{alert.remarks || "SOS Emergency Panic Triggered"}&quot;
                       </div>
                     </div>
 
