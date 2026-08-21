@@ -292,6 +292,32 @@ const Map = forwardRef(function Map(
     internalUpdateRef.current = false;
   }, [mapInstance, isControlled, viewport]);
 
+  // Cinematic flyTo zoom-out -> zoom-in camera animation when center or zoom props change
+  useEffect(() => {
+    if (!mapInstance || isControlled || !props.center) return;
+    const currentCenter = mapInstance.getCenter();
+    const targetLng = props.center[0];
+    const targetLat = props.center[1];
+
+    if (
+      Math.abs(currentCenter.lng - targetLng) < 0.00005 &&
+      Math.abs(currentCenter.lat - targetLat) < 0.00005
+    ) {
+      return;
+    }
+
+    internalUpdateRef.current = true;
+    mapInstance.flyTo({
+      center: [targetLng, targetLat],
+      zoom: props.zoom ?? 17,
+      duration: 2400, // 2.4s cinematic flyTo transition
+      curve: 1.42,
+      speed: 1.2,
+      essential: true,
+    });
+    internalUpdateRef.current = false;
+  }, [mapInstance, isControlled, props.center, props.zoom]);
+
   // Handle style change: close the gate (so layer children tear down and
   // re-add on the incoming style) - the swap itself is staged to the effect below.
   useEffect(() => {

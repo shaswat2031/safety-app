@@ -27,6 +27,7 @@ import {
   Activity,
   Wifi,
 } from "lucide-react";
+import { fetchRealRoadRoute } from "@/lib/routingService";
 import { toast } from "sonner";
 
 /* ─────────────────────────────────────────────────────────────
@@ -44,21 +45,42 @@ function SOSLocationMap({ alert, onReachLocation, onResolve }) {
 
   const targetPos = [workerLng, workerLat];
 
+  // Route & ETA state from real road routing engine
+  const [routeInfo, setRouteInfo] = useState(null);
+  const [loadingRoute, setLoadingRoute] = useState(true);
+
   // Live ambulance movement progress (0 to 1)
-  const [progress, setProgress] = useState(alert.status === "on_scene" ? 1 : 0.2);
+  const [progress, setProgress] = useState(alert.status === "on_scene" ? 1 : 0.05);
   const [isReached, setIsReached] = useState(alert.status === "on_scene");
 
-  // Simulate real-time movement to SOS location when dispatched
+  // Fetch real road route geometry from OSRM API
+  useEffect(() => {
+    let isCancelled = false;
+    setLoadingRoute(true);
+
+    fetchRealRoadRoute(qrfStart[0], qrfStart[1], targetPos[0], targetPos[1]).then((res) => {
+      if (!isCancelled && res) {
+        setRouteInfo(res);
+        setLoadingRoute(false);
+      }
+    });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [qrfStart[0], qrfStart[1], targetPos[0], targetPos[1]]);
+
+  // Simulate real-time movement along real road coordinates when dispatched
   useEffect(() => {
     if (!isReached) {
       const timer = setInterval(() => {
         setProgress((prev) => {
-          if (prev >= 0.95) {
+          if (prev >= 0.96) {
             return 1;
           }
-          return prev + 0.15;
+          return prev + 0.08;
         });
-      }, 1200);
+      }, 1000);
       return () => clearInterval(timer);
     }
   }, [isReached]);
@@ -70,25 +92,30 @@ function SOSLocationMap({ alert, onReachLocation, onResolve }) {
       if (typeof onReachLocation === "function") {
         onReachLocation(alert.id);
       }
-      toast.success(`🚑 QRF Unit has arrived at ${alert.worker_name}'s exact SOS location!`);
+      toast.success(`🚑 QRF Ambulance arrived at ${alert.worker_name}'s exact SOS location!`);
     }
   }, [progress, isReached, alert.id, alert.worker_name, onReachLocation]);
 
-  // Current interpolated ambulance coordinates
-  const currentLng = qrfStart[0] + (targetPos[0] - qrfStart[0]) * progress;
-  const currentLat = qrfStart[1] + (targetPos[1] - qrfStart[1]) * progress;
+  // Interpolate position strictly along actual road coordinates
+  const roadCoords = routeInfo?.coordinates || [qrfStart, targetPos];
+  let currentLng = qrfStart[0];
+  let currentLat = qrfStart[1];
 
-  const routePath = [
-    qrfStart,
-    [
-      qrfStart[0] + (targetPos[0] - qrfStart[0]) * 0.5,
-      qrfStart[1] + (targetPos[1] - qrfStart[1]) * 0.5 + 0.0008,
-    ],
-    targetPos,
-  ];
+  if (roadCoords.length > 1) {
+    const exactIndex = (roadCoords.length - 1) * progress;
+    const lowerIndex = Math.floor(exactIndex);
+    const upperIndex = Math.min(Math.ceil(exactIndex), roadCoords.length - 1);
+    const factor = exactIndex - lowerIndex;
+
+    const p1 = roadCoords[lowerIndex];
+    const p2 = roadCoords[upperIndex];
+
+    currentLng = p1[0] + (p2[0] - p1[0]) * factor;
+    currentLat = p1[1] + (p2[1] - p1[1]) * factor;
+  }
 
   return (
-    <div className="relative w-full h-[400px] sm:h-[460px] rounded-3xl overflow-hidden border-2 border-slate-200 shadow-xl bg-slate-900">
+    <div className="relative w-full h-[420px] sm:h-[480px] rounded-3xl overflow-hidden border-2 border-slate-200 shadow-xl bg-slate-900">
       <Map
         center={[(qrfStart[0] + targetPos[0]) / 2, (qrfStart[1] + targetPos[1]) / 2]}
         zoom={14.8}
@@ -97,24 +124,25 @@ function SOSLocationMap({ alert, onReachLocation, onResolve }) {
       >
         <MapControls position="top-right" showZoom showFullscreen />
 
-        {/* Dynamic Route Line connecting QRF -> SOS Location */}
+        {/* Real Road Navigation Route Line connecting QRF -> SOS Location */}
         <MapRoute
-          coordinates={routePath}
+          coordinates={roadCoords}
           color="#2563eb"
-          width={4}
-          opacity={0.85}
-          dashArray={[2, 2]}
+          width={5}
+          opacity={0.9}
         />
 
         {/* QRF Ambulance Moving Unit Marker */}
         <MapMarker longitude={currentLng} latitude={currentLat}>
           <MarkerContent>
-            <div className="w-9 h-9 rounded-2xl bg-blue-600 border-2 border-white text-white font-bold flex items-center justify-center shadow-2xl text-base transition-all duration-500 hover:scale-125 cursor-pointer">
+            <div className="w-10 h-10 rounded-2xl bg-blue-600 border-2 border-white text-white font-bold flex items-center justify-center shadow-2xl text-lg transition-all duration-300 hover:scale-125 cursor-pointer">
               🚑
             </div>
           </MarkerContent>
           <MarkerTooltip>
-            {isReached ? "QRF Ambulance: Arrived On Scene" : "QRF Ambulance: Navigating to SOS Location..."}
+            {isReached
+              ? "QRF Ambulance: Arrived On Scene"
+              : `QRF Ambulance: Navigating Real Road Route (${routeInfo?.distanceText || ""} • ${routeInfo?.durationText || ""})`}
           </MarkerTooltip>
         </MapMarker>
 
@@ -122,8 +150,8 @@ function SOSLocationMap({ alert, onReachLocation, onResolve }) {
         <MapMarker longitude={targetPos[0]} latitude={targetPos[1]}>
           <MarkerContent>
             <div className="relative flex items-center justify-center cursor-pointer">
-              <div className="absolute w-10 h-10 bg-red-500/50 rounded-full animate-ping"></div>
-              <div className="w-8 h-8 rounded-full bg-red-600 border-2 border-white text-white font-black text-xs flex items-center justify-center shadow-2xl hover:scale-125 transition-transform">
+              <div className="absolute w-12 h-12 bg-red-500/50 rounded-full animate-ping"></div>
+              <div className="w-9 h-9 rounded-full bg-red-600 border-2 border-white text-white font-black text-xs flex items-center justify-center shadow-2xl hover:scale-125 transition-transform">
                 SOS
               </div>
             </div>
@@ -140,6 +168,11 @@ function SOSLocationMap({ alert, onReachLocation, onResolve }) {
               <div className="text-[10px] text-slate-500 font-mono">
                 GPS: {alert.latitude.toFixed(5)}°, {alert.longitude.toFixed(5)}°
               </div>
+              {routeInfo && (
+                <div className="text-[10px] text-blue-600 font-semibold border-t border-slate-100 pt-1">
+                  Road Dist: {routeInfo.distanceText} • Driving ETA: {routeInfo.durationText}
+                </div>
+              )}
             </div>
           </MarkerPopup>
           <MarkerTooltip>
@@ -152,9 +185,15 @@ function SOSLocationMap({ alert, onReachLocation, onResolve }) {
       <div className="absolute top-4 left-4 z-[10] bg-white/95 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-slate-200 shadow-md text-xs flex items-center gap-3">
         <div className="flex items-center gap-2">
           <span className="w-2.5 h-2.5 rounded-full bg-red-600 animate-pulse"></span>
-          <span className="font-bold text-slate-900">Target SOS Location:</span>
-          <span className="font-semibold text-slate-700">{alert.zone_name || "Industrial Site Sector"}</span>
+          <span className="font-bold text-slate-900">SOS Origin Location:</span>
+          <span className="font-semibold text-slate-700">{alert.zone_name || "Industrial Sector"}</span>
         </div>
+        {routeInfo && (
+          <div className="hidden sm:flex items-center gap-2 border-l border-slate-200 pl-3 text-slate-600 font-medium">
+            <span>Road Distance: <strong className="text-blue-700 font-bold">{routeInfo.distanceText}</strong></span>
+            <span>Est. Drive Time: <strong className="text-emerald-700 font-bold">{routeInfo.durationText}</strong></span>
+          </div>
+        )}
       </div>
 
       {/* Arrival & Resolve Floating Button Overlay */}
@@ -168,7 +207,10 @@ function SOSLocationMap({ alert, onReachLocation, onResolve }) {
           ) : (
             <div className="flex items-center gap-2 text-blue-700 font-bold">
               <span className="w-3 h-3 rounded-full bg-blue-600 animate-pulse"></span>
-              <span>En Route to SOS Location • Navigating...</span>
+              <span>
+                Navigating Real Road Route
+                {routeInfo ? ` (${routeInfo.distanceText} • ETA: ${routeInfo.durationText})` : "..."}
+              </span>
             </div>
           )}
         </div>
@@ -204,9 +246,9 @@ export default function ResponsePage() {
     }
   }, [isAuthenticated, authLoading, router]);
 
-  // Active SOS Alerts Queue
+  // Active SOS Alerts Queue (Shows ONLY after Command Center acknowledges/dispatches)
   const activeEmergencies = sosAlerts.filter(
-    (a) => a.status === "active" || a.status === "acknowledged" || a.status === "dispatched" || a.status === "on_scene"
+    (a) => a.status === "acknowledged" || a.status === "dispatched" || a.status === "on_scene"
   );
   const resolvedEmergencies = sosAlerts.filter((a) => a.status === "resolved");
 

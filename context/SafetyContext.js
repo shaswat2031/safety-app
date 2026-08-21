@@ -35,17 +35,17 @@ export function SafetyProvider({ children }) {
   const DEFAULT_ZONES = [
     {
       id: "location-1",
-      zone_name: "Location 1",
+      zone_name: "Industrial Site Area",
       zone_type: "hazard",
-      description: "Primary Operational Geofence Boundary (Location 1)",
-      site_location: "Location 1 Site",
+      description: "Primary Operational Industrial Geofence Boundary (Sector 69)",
+      site_location: "Vedanta Industrial Complex",
       speed_limit_kmh: 15,
       is_active: true,
       polygon_coordinates: [
-        [19.704395, 83.404655],
-        [19.706178, 83.390435],
-        [19.717594, 83.394098],
-        [19.717252, 83.406113],
+        [28.388, 77.028],
+        [28.402, 77.028],
+        [28.402, 77.048],
+        [28.388, 77.048],
       ],
     },
     {
@@ -57,25 +57,25 @@ export function SafetyProvider({ children }) {
       speed_limit_kmh: 15,
       is_active: true,
       polygon_coordinates: [
-        [21.815, 84.021],
-        [21.818, 84.028],
-        [21.812, 84.032],
-        [21.808, 84.025],
+        [28.393, 77.035],
+        [28.398, 77.035],
+        [28.398, 77.042],
+        [28.393, 77.042],
       ],
     },
     {
       id: "zone-2",
-      zone_name: "Restricted Mining Pit Alpha",
+      zone_name: "Restricted Operations Pit",
       zone_type: "restricted",
       description: "Heavy machinery operation pit. Restricted access to authorized personnel only.",
-      site_location: "Open Cast Mine Sector B",
+      site_location: "Sector B Operations",
       speed_limit_kmh: 20,
       is_active: true,
       polygon_coordinates: [
-        [21.820, 84.015],
-        [21.825, 84.022],
-        [21.821, 84.027],
-        [21.816, 84.020],
+        [28.390, 77.030],
+        [28.394, 77.030],
+        [28.394, 77.036],
+        [28.390, 77.036],
       ],
     },
     {
@@ -87,10 +87,10 @@ export function SafetyProvider({ children }) {
       speed_limit_kmh: 30,
       is_active: true,
       polygon_coordinates: [
-        [21.810, 84.028],
-        [21.814, 84.034],
-        [21.809, 84.038],
-        [21.806, 84.031],
+        [28.396, 77.040],
+        [28.400, 77.040],
+        [28.400, 77.046],
+        [28.396, 77.046],
       ],
     },
   ];
@@ -98,18 +98,18 @@ export function SafetyProvider({ children }) {
   const DEFAULT_WORKERS = [
     {
       id: "w-101",
-      name: "Rajesh Kumar",
-      code: "VED-MN-101",
-      department: "Smelter Operations",
+      name: "Field Worker",
+      code: "VED-MN-4092",
+      department: "Field Operations",
       phone: "+91 98765 43210",
       blood_group: "O+",
-      lat: 19.711355,
-      lng: 83.398825,
+      lat: 28.39551,
+      lng: 77.03948,
       speed: 0,
       heading: 90,
-      battery: 92,
-      is_sos_active: false,
-      zone: "Location 1",
+      battery: 100,
+      is_sos_active: true,
+      zone: "Industrial Site Area",
       last_ping: "Just now",
     },
     {
@@ -119,13 +119,13 @@ export function SafetyProvider({ children }) {
       department: "Conveyor Maintenance",
       phone: "+91 98765 12345",
       blood_group: "A+",
-      lat: 19.708,
-      lng: 83.395,
+      lat: 28.392,
+      lng: 77.036,
       speed: 12,
       heading: 180,
       battery: 78,
       is_sos_active: false,
-      zone: "Location 1",
+      zone: "Industrial Site Area",
       last_ping: "Just now",
     },
     {
@@ -135,13 +135,13 @@ export function SafetyProvider({ children }) {
       department: "Field Electrical",
       phone: "+91 98765 67890",
       blood_group: "B+",
-      lat: 19.715,
-      lng: 83.402,
+      lat: 28.399,
+      lng: 77.042,
       speed: 5,
       heading: 45,
       battery: 85,
       is_sos_active: false,
-      zone: "Location 1",
+      zone: "Industrial Site Area",
       last_ping: "Just now",
     },
   ];
@@ -152,16 +152,36 @@ export function SafetyProvider({ children }) {
       name: "QRF Ambulance Alpha",
       leader: "Dr. A. Sen (MedMedic Chief)",
       status: "dispatched",
-      lat: 19.707,
-      lng: 83.394,
+      lat: 28.388,
+      lng: 77.031,
     },
     {
       id: "resp-2",
       name: "QRF Rescue Unit Bravo",
       leader: "Capt. Vikram (Safety Marshal)",
       status: "ready",
-      lat: 19.716,
-      lng: 83.401,
+      lat: 28.397,
+      lng: 77.045,
+    },
+  ];
+
+  const DEFAULT_INCIDENTS = [
+    {
+      id: "inc-demo-1",
+      title: "Gas leak near Conveyor Unit 4",
+      category: "fire",
+      severity: "high",
+      reporter_name: "Rajesh Kumar",
+      reporter_code: "VED-MN-101",
+      description: "Friction smoke and gas leak observed near Conveyor Unit 4. Thermal camera scan verified.",
+      status: "open",
+      location: "Sector 69 Sector",
+      lat: 28.39551,
+      lng: 77.03948,
+      media_urls: [
+        "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=800&q=80",
+      ],
+      created_at: "Just now",
     },
   ];
 
@@ -169,7 +189,7 @@ export function SafetyProvider({ children }) {
   const [workers, setWorkers] = useState(DEFAULT_WORKERS);
   const [responders, setResponders] = useState(DEFAULT_RESPONDERS);
   const [sosAlerts, setSosAlerts] = useState([]);
-  const [incidents, setIncidents] = useState([]);
+  const [incidents, setIncidents] = useState(DEFAULT_INCIDENTS);
   const [isSirenMuted, setIsSirenMuted] = useState(true); // Siren sound starts OFF
   const [isOnline, setIsOnline] = useState(true);
   const [offlineQueue, setOfflineQueue] = useState([]);

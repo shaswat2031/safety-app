@@ -50,7 +50,8 @@ import {
   ShieldCheck,
   UserX,
   ExternalLink,
-  PlusCircle
+  PlusCircle,
+  Camera
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -84,6 +85,8 @@ export default function CommandPage() {
 
   // UI States
   const [selectedWorker, setSelectedWorker] = useState(null);
+  const [selectedAlert, setSelectedAlert] = useState(null);
+  const [selectedPhotoModal, setSelectedPhotoModal] = useState(null);
   const [activeTab, setActiveTab] = useState("monitoring");
   const [mapLayer, setMapLayer] = useState("satellite");
   const [severityFilter, setSeverityFilter] = useState("all");
@@ -284,6 +287,18 @@ export default function CommandPage() {
     return false;
   };
 
+  const handleFocusAlertOnMap = (alert) => {
+    setSelectedAlert(alert);
+    const matchingWorker = workers.find(
+      (w) => w.id === alert.worker_id || w.name === alert.worker_name
+    );
+    if (matchingWorker) {
+      setSelectedWorker(matchingWorker);
+    }
+    setActiveTab("monitoring");
+    toast.info(`📍 Centering Map on Siren Origin: ${alert.worker_name} (${alert.zone_name || "Industrial Area"})`);
+  };
+
   return (
     <div className="flex-1 flex flex-col p-4 sm:p-6 max-w-[1800px] mx-auto w-full space-y-4 bg-slate-50 min-h-screen">
       {/* Top Command Center Header */}
@@ -375,9 +390,10 @@ export default function CommandPage() {
       {/* KPI Metric Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <div
-          className={`p-3.5 rounded-2xl border transition-all ${
+          onClick={() => activeSOS.length > 0 && handleFocusAlertOnMap(activeSOS[0])}
+          className={`p-3.5 rounded-2xl border transition-all cursor-pointer ${
             criticalCount > 0
-              ? "bg-red-50 border-red-300 shadow-sm shadow-red-500/10"
+              ? "bg-red-50 border-red-300 shadow-sm shadow-red-500/10 hover:bg-red-100/80"
               : "bg-white border-slate-200 shadow-xs"
           }`}
         >
@@ -389,7 +405,7 @@ export default function CommandPage() {
             {criticalCount}
           </div>
           <div className="text-[10px] text-slate-500 mt-0.5 font-medium">
-            {criticalCount > 0 ? "Action Required" : "Sectors Clear"}
+            {criticalCount > 0 ? "Click to Locate Siren" : "Sectors Clear"}
           </div>
         </div>
 
@@ -472,6 +488,7 @@ export default function CommandPage() {
         {[
           { id: "monitoring", label: "Live Map", icon: RadioTower, count: null },
           { id: "workers", label: "Staff Tracking", icon: Users, count: workers.length },
+          { id: "incidents", label: "Hazard Reports & Photos", icon: Camera, count: incidents.length },
           { id: "zones", label: "Safety Zones", icon: Layers, count: zones.length },
           { id: "analytics", label: "Analytics & Audits", icon: BarChart3, count: null },
         ].map((tab) => {
@@ -516,13 +533,15 @@ export default function CommandPage() {
               selectedWorkerId={selectedWorker?.id}
               onSelectWorker={(w) => setSelectedWorker(w)}
               center={
-                selectedWorker
+                selectedAlert
+                  ? [selectedAlert.latitude, selectedAlert.longitude]
+                  : selectedWorker
                   ? [selectedWorker.lat, selectedWorker.lng]
                   : activeSOS[0]
                   ? [activeSOS[0].latitude, activeSOS[0].longitude]
                   : [19.711355, 83.398825]
               }
-              zoom={selectedWorker || activeSOS.length > 0 ? 17 : 15}
+              zoom={selectedAlert || selectedWorker || activeSOS.length > 0 ? 17 : 15}
             />
           </div>
 
@@ -593,6 +612,15 @@ export default function CommandPage() {
                         &quot;{alert.remarks || "SOS Emergency Panic Triggered"}&quot;
                       </div>
                     </div>
+
+                    {/* Prominent Map Location Button */}
+                    <button
+                      onClick={() => handleFocusAlertOnMap(alert)}
+                      className="w-full mb-2 py-1.5 px-3 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+                    >
+                      <MapPin className="w-3.5 h-3.5" />
+                      <span>📍 View Siren Location on Map</span>
+                    </button>
 
                     <div className="flex items-center justify-between text-[10px] text-slate-500 mb-2">
                       <span className="flex items-center gap-1">
@@ -843,6 +871,133 @@ export default function CommandPage() {
       )}
 
       {/* ==========================================
+          TAB 3: FIELD HAZARD REPORTS & CAMERA PHOTOS
+          ========================================== */}
+      {activeTab === "incidents" && (
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+            <div>
+              <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                <Camera className="w-5 h-5 text-amber-600" /> Field Worker Hazard Photos & Incident Reports
+              </h2>
+              <p className="text-xs text-slate-500">
+                Live worker-submitted photos, hazard reports, equipment damage, and environmental telemetry.
+              </p>
+            </div>
+            <span className="text-xs font-mono font-bold bg-amber-50 text-amber-800 border border-amber-200 px-3 py-1 rounded-xl">
+              {incidents.length} Reported Incidents
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {incidents.length === 0 ? (
+              <div className="col-span-3 text-center py-12 text-slate-400 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
+                <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto mb-2" />
+                <div className="text-sm font-bold text-slate-800">No Field Hazard Reports</div>
+                <p className="text-xs text-slate-500">All clear across plant sectors.</p>
+              </div>
+            ) : (
+              incidents.map((inc) => {
+                const hasPhoto = inc.media_urls && inc.media_urls.length > 0;
+                const mainPhoto = hasPhoto ? inc.media_urls[0] : null;
+
+                return (
+                  <div
+                    key={inc.id}
+                    className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs hover:shadow-md transition-all flex flex-col justify-between"
+                  >
+                    <div>
+                      {/* Photo Thumbnail / Preview */}
+                      {mainPhoto ? (
+                        <div
+                          onClick={() => setSelectedPhotoModal({ photo: mainPhoto, title: inc.title, reporter: inc.reporter_name })}
+                          className="relative h-48 w-full bg-slate-900 overflow-hidden cursor-pointer group"
+                        >
+                          <img
+                            src={mainPhoto}
+                            alt={inc.title}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent opacity-80" />
+                          <div className="absolute top-3 left-3 bg-red-600/90 text-white text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider shadow">
+                            📷 CAMERA PHOTO ATTACHED
+                          </div>
+                          <div className="absolute bottom-3 left-3 right-3 text-white text-xs font-bold truncate">
+                            Click to View Full Photo 🔍
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="h-28 bg-slate-100 flex items-center justify-center text-slate-400 text-xs font-semibold">
+                          No Photo Attached
+                        </div>
+                      )}
+
+                      <div className="p-4 space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <h3 className="font-black text-slate-900 text-sm leading-tight">{inc.title}</h3>
+                          <SeverityBadge severity={inc.severity || "medium"} />
+                        </div>
+
+                        <p className="text-xs text-slate-600 leading-relaxed line-clamp-3">
+                          &quot;{inc.description}&quot;
+                        </p>
+
+                        <div className="pt-2 border-t border-slate-100 grid grid-cols-2 gap-2 text-[11px] text-slate-600">
+                          <div>
+                            <span className="text-slate-400">Reporter:</span>
+                            <div className="font-bold text-slate-800 truncate">{inc.reporter_name}</div>
+                          </div>
+                          <div>
+                            <span className="text-slate-400">Tagged GPS:</span>
+                            <div className="font-mono font-bold text-blue-700 truncate">
+                              {inc.lat ? `${inc.lat.toFixed(4)}°, ${inc.lng.toFixed(4)}°` : "28.3955°, 77.0395°"}
+                            </div>
+                          </div>
+                          <div>
+                            <span className="text-slate-400">Category:</span>
+                            <div className="font-bold text-purple-700 uppercase text-[10px]">{inc.category}</div>
+                          </div>
+                          <div>
+                            <span className="text-slate-400">Time Reported:</span>
+                            <div className="font-mono text-slate-700">{inc.created_at || "Just now"}</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Bottom Action Bar */}
+                    <div className="p-3 bg-slate-50 border-t border-slate-100 flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          setSelectedWorker({ lat: inc.lat || 19.711355, lng: inc.lng || 83.398825, name: inc.reporter_name });
+                          setActiveTab("monitoring");
+                          toast.info(`📍 Centering GIS map on hazard report location`);
+                        }}
+                        className="flex-1 py-1.5 px-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+                      >
+                        <MapPin className="w-3.5 h-3.5" />
+                        <span>View on GIS Map</span>
+                      </button>
+
+                      {mainPhoto && (
+                        <button
+                          onClick={() => setSelectedPhotoModal({ photo: mainPhoto, title: inc.title, reporter: inc.reporter_name })}
+                          className="py-1.5 px-3 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-xs rounded-xl flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>Photo</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ==========================================
           TAB 4: ANALYTICS & HISTORICAL AUDITS
           ========================================== */}
       {activeTab === "analytics" && (
@@ -1068,6 +1223,45 @@ export default function CommandPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Full-Size Photo Modal */}
+      {selectedPhotoModal && (
+        <div className="fixed inset-0 z-[3000] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-2xl w-full overflow-hidden space-y-3">
+            <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-900 text-white">
+              <div>
+                <div className="text-[10px] font-mono text-amber-400 font-bold uppercase tracking-wider">
+                  FIELD HAZARD CAMERA VERIFICATION
+                </div>
+                <h3 className="text-sm font-bold text-white">{selectedPhotoModal.title}</h3>
+              </div>
+              <button
+                onClick={() => setSelectedPhotoModal(null)}
+                className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-3">
+              <div className="max-h-[70vh] rounded-2xl overflow-hidden bg-slate-900 border border-slate-200 flex items-center justify-center">
+                <img
+                  src={selectedPhotoModal.photo}
+                  alt={selectedPhotoModal.title}
+                  className="max-h-[65vh] w-auto max-w-full object-contain rounded-xl"
+                />
+              </div>
+
+              <div className="flex items-center justify-between text-xs text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                <span>Reporter: <strong className="text-slate-900 font-bold">{selectedPhotoModal.reporter}</strong></span>
+                <span className="text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 text-[10px]">
+                  ✓ Verified Photo Stream
+                </span>
+              </div>
+            </div>
           </div>
         </div>
       )}

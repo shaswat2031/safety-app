@@ -41,14 +41,14 @@ function createCircleGeoJSON(centerLng, centerLat, radiusKm, points = 64) {
 export default function LeafletMap({
   selectedWorkerId = null,
   onSelectWorker = () => {},
-  center = [19.711355, 83.398825],
-  zoom = 14,
+  center = [28.39551, 77.03948],
+  zoom = 15,
   showResponders = true,
   showZones = false,
 }) {
   const { workers, zones, responders, sosAlerts, dispatchResponseTeam } = useSafety();
   const [myLocation, setMyLocation] = useState(null);
-  const [show25kmCircle, setShow25kmCircle] = useState(true);
+  const [show25kmCircle, setShow25kmCircle] = useState(false);
   const [showRadarModal, setShowRadarModal] = useState(false);
 
   // Live High-Precision GPS Geolocation Tracking for My Location (Blue Dot)
@@ -63,8 +63,7 @@ export default function LeafletMap({
           });
         },
         (err) => {
-          // Fallback location if GPS permission denied/unavailable
-          setMyLocation((prev) => prev || { lat: center[0] || 19.711355, lng: center[1] || 83.398825, accuracy: 10 });
+          setMyLocation((prev) => prev || { lat: center[0] || 28.39551, lng: center[1] || 77.03948, accuracy: 10 });
         },
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
       );
@@ -75,7 +74,7 @@ export default function LeafletMap({
   // Convert center from [lat, lng] to MapLibre [lng, lat]
   const mapCenter = myLocation
     ? [myLocation.lng, myLocation.lat]
-    : [center[1] || 83.398825, center[0] || 19.711355];
+    : [center[1] || 77.03948, center[0] || 28.39551];
 
   // Active dispatches
   const activeDispatches = sosAlerts.filter(
@@ -201,49 +200,50 @@ export default function LeafletMap({
           </>
         )}
 
-        {/* Geofence Polygons */}
-        {zones.map((zone) => {
-          const colorMap = {
-            hazard: "#ef4444",
-            restricted: "#f59e0b",
-            safe: "#10b981",
-            no_network: "#6366f1",
-          };
-          const zoneColor = colorMap[zone.zone_type] || "#3b82f6";
+        {/* Geofence Polygons (Only rendered if showZones is explicitly true) */}
+        {showZones &&
+          zones.map((zone) => {
+            const colorMap = {
+              hazard: "#ef4444",
+              restricted: "#f59e0b",
+              safe: "#10b981",
+              no_network: "#6366f1",
+            };
+            const zoneColor = colorMap[zone.zone_type] || "#3b82f6";
 
-          // Convert polygon [lat, lng] to GeoJSON [lng, lat]
-          const ring = (zone.polygon_coordinates || []).map(([lat, lng]) => [lng, lat]);
-          if (ring.length > 0 && (ring[0][0] !== ring[ring.length - 1][0] || ring[0][1] !== ring[ring.length - 1][1])) {
-            ring.push(ring[0]); // Ensure closed ring
-          }
+            // Convert polygon [lat, lng] to GeoJSON [lng, lat]
+            const ring = (zone.polygon_coordinates || []).map(([lat, lng]) => [lng, lat]);
+            if (ring.length > 0 && (ring[0][0] !== ring[ring.length - 1][0] || ring[0][1] !== ring[ring.length - 1][1])) {
+              ring.push(ring[0]); // Ensure closed ring
+            }
 
-          const geojsonFeature = {
-            type: "Feature",
-            geometry: {
-              type: "Polygon",
-              coordinates: [ring],
-            },
-            properties: {
-              name: zone.zone_name,
-            },
-          };
+            const geojsonFeature = {
+              type: "Feature",
+              geometry: {
+                type: "Polygon",
+                coordinates: [ring],
+              },
+              properties: {
+                name: zone.zone_name,
+              },
+            };
 
-          return (
-            <MapGeoJSON
-              key={zone.id}
-              id={`zone-${zone.id}`}
-              data={geojsonFeature}
-              fillPaint={{
-                "fill-color": zoneColor,
-                "fill-opacity": 0.2,
-              }}
-              linePaint={{
-                "line-color": zoneColor,
-                "line-width": 2.5,
-              }}
-            />
-          );
-        })}
+            return (
+              <MapGeoJSON
+                key={zone.id}
+                id={`zone-${zone.id}`}
+                data={geojsonFeature}
+                fillPaint={{
+                  "fill-color": zoneColor,
+                  "fill-opacity": 0.2,
+                }}
+                linePaint={{
+                  "line-color": zoneColor,
+                  "line-width": 2.5,
+                }}
+              />
+            );
+          })}
 
         {/* Active Dispatch Navigation Routes */}
         {activeDispatches.map((dispatch) => {
@@ -285,6 +285,67 @@ export default function LeafletMap({
               </MarkerPopup>
             </MapMarker>
           ))}
+
+        {/* Dedicated Active SOS Siren Distress Markers */}
+        {sosAlerts
+          .filter((alert) => alert.status === "active" || alert.status === "acknowledged" || alert.status === "dispatched")
+          .map((alert) => {
+            const alertLng = Number(alert.longitude) || 77.03948;
+            const alertLat = Number(alert.latitude) || 28.39551;
+
+            return (
+              <MapMarker
+                key={`sos-siren-${alert.id}`}
+                longitude={alertLng}
+                latitude={alertLat}
+              >
+                <MarkerContent>
+                  <div className="relative flex items-center justify-center cursor-pointer">
+                    {/* Glowing Red Radar Beacons */}
+                    <div className="absolute w-12 h-12 bg-red-600/40 rounded-full animate-ping pointer-events-none"></div>
+                    <div className="absolute w-8 h-8 bg-red-500/30 rounded-full animate-pulse border border-red-400"></div>
+                    {/* Core Red Glowing Siren Icon */}
+                    <div className="w-9 h-9 rounded-full bg-red-600 border-2 border-white text-white font-black text-xs flex items-center justify-center shadow-2xl animate-bounce hover:scale-125 transition-transform z-20">
+                      🚨
+                    </div>
+                  </div>
+                </MarkerContent>
+                <MarkerPopup closeButton>
+                  <div className="w-56 text-xs text-slate-800 space-y-2 p-1">
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
+                      <span className="font-bold text-red-700 text-sm flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-red-600 animate-ping"></span>
+                        {alert.worker_name}
+                      </span>
+                      <span className="bg-red-100 text-red-700 font-black px-2 py-0.5 rounded border border-red-300 text-[10px] animate-pulse">
+                        SOS ACTIVE
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-1 text-[11px] text-slate-600">
+                      <div><span className="text-slate-400">Dept:</span> <span className="font-semibold text-slate-800">{alert.department}</span></div>
+                      <div><span className="text-slate-400">Battery:</span> <span className="font-semibold text-emerald-600">{alert.battery || 88}%</span></div>
+                      <div className="col-span-2 font-mono text-[10px] text-slate-500">
+                        GPS Coords: [{alertLat.toFixed(4)}°, {alertLng.toFixed(4)}°]
+                      </div>
+                      <div className="col-span-2 text-red-700 font-bold bg-red-50 p-1.5 rounded border border-red-200 text-[10px]">
+                        &quot;{alert.remarks || "SOS Emergency Distress Signal"}&quot;
+                      </div>
+                    </div>
+
+                    <div className="pt-1.5 border-t border-slate-100">
+                      <button
+                        onClick={() => dispatchResponseTeam(alert.id)}
+                        className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-1.5 px-3 rounded-lg text-xs transition-colors shadow flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        <span>🚑 Dispatch QRF Ambulance</span>
+                      </button>
+                    </div>
+                  </div>
+                </MarkerPopup>
+              </MapMarker>
+            );
+          })}
 
         {/* Field Worker Markers */}
         {workers.map((worker) => {

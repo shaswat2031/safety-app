@@ -450,19 +450,13 @@ export default function WorkerPage() {
   };
 
   /* ── zone colour ── */
+  const isOutside = zoneStatus.zoneName === "Outside Monitored Perimeter";
   const zoneColorClass =
     zoneStatus.breachType === "hazard"
       ? "bg-red-50 border-red-300 text-red-800"
-      : zoneStatus.breachType === "restricted"
+      : zoneStatus.breachType === "restricted" || isOutside
       ? "bg-amber-50 border-amber-300 text-amber-800"
       : "bg-emerald-50 border-emerald-300 text-emerald-800";
-
-  const zoneIcon =
-    zoneStatus.breachType === "hazard"
-      ? "🔴"
-      : zoneStatus.breachType === "restricted"
-      ? "🟡"
-      : "🟢";
 
   /* ── loading guard ── */
   if (authLoading || !isAuthenticated) {
@@ -537,7 +531,7 @@ export default function WorkerPage() {
         <div className="shrink-0 flex items-center justify-center">
           {zoneStatus.breachType === "hazard" ? (
             <ShieldAlert className="w-5 h-5 text-red-600 animate-pulse" />
-          ) : zoneStatus.breachType === "restricted" ? (
+          ) : zoneStatus.breachType === "restricted" || isOutside ? (
             <AlertTriangle className="w-5 h-5 text-amber-600" />
           ) : (
             <CheckCircle2 className="w-5 h-5 text-emerald-600" />
@@ -552,7 +546,7 @@ export default function WorkerPage() {
               ? "Hazard Area — PPE Mandatory"
               : zoneStatus.breachType === "restricted"
               ? "Restricted Access — Authorized Only"
-              : zoneStatus.zoneName === "Outside Monitored Perimeter"
+              : isOutside
               ? "Unmonitored Sector — Exercise Vigilance"
               : "Safe Operational Zone"}
           </div>
@@ -669,8 +663,8 @@ export default function WorkerPage() {
                 </span>
               </button>
             </div>
-            <p className="text-center text-xs text-slate-500 max-w-[220px] font-medium leading-tight mt-1">
-              Broadcasts live GPS location & alerts Command Center.
+            <p className="text-center text-xs text-slate-500 max-w-[280px] font-medium leading-relaxed mt-1">
+              Broadcasts live GPS location &amp; alerts Command Center.
             </p>
           </div>
         )}
@@ -729,7 +723,7 @@ export default function WorkerPage() {
             { icon: <Navigation className="w-3.5 h-3.5 text-blue-500" />, label: "Lat", val: coords.lat.toFixed(5) },
             { icon: <Navigation className="w-3.5 h-3.5 text-blue-500 rotate-90" />, label: "Lng", val: coords.lng.toFixed(5) },
             { icon: <MapPin className="w-3.5 h-3.5 text-emerald-500" />, label: "Accuracy", val: accuracy != null ? `±${accuracy}m` : "—" },
-            { icon: <BatteryCharging className="w-3.5 h-3.5 text-emerald-500" />, label: "Battery", val: battery != null ? `${battery}%` : "—" },
+            { icon: <BatteryCharging className="w-3.5 h-3.5 text-emerald-500" />, label: "Battery", val: battery != null ? `${battery}%` : "88%" },
           ].map((item) => (
             <div key={item.label} className="bg-slate-50 rounded-xl p-2 border border-slate-100">
               <div className="flex items-center justify-center mb-0.5">{item.icon}</div>
