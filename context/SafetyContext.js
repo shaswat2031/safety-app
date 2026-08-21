@@ -328,7 +328,7 @@ export function SafetyProvider({ children }) {
             lng: loc ? Number(loc.longitude) : 84.02,
             speed: loc ? Number(loc.speed_kmh) : 0,
             heading: loc ? Number(loc.heading) : 0,
-            battery: 88,
+            battery: loc?.battery_level != null ? Number(loc.battery_level) : (p.battery != null ? Number(p.battery) : 88),
             is_sos_active: loc ? Boolean(loc.is_sos_active) : false,
             zone: "Main Facility",
             last_ping: loc?.last_ping ? new Date(loc.last_ping).toLocaleTimeString() : "Live",
@@ -393,7 +393,7 @@ export function SafetyProvider({ children }) {
   }, [sosAlerts, isSirenMuted]);
 
   // Update Worker GPS in memory and Supabase worker_locations table
-  const updateWorkerLocation = (workerId, lat, lng, speed = 0, heading = 0, profileData = null) => {
+  const updateWorkerLocation = (workerId, lat, lng, speed = 0, heading = 0, profileData = null, batteryLevel = null) => {
     if (!workerId || lat == null || lng == null) return;
     const evaluation = evaluateGeofence([lat, lng], zones);
 
@@ -411,7 +411,7 @@ export function SafetyProvider({ children }) {
           lng,
           speed,
           heading,
-          battery: 88,
+          battery: batteryLevel != null ? Number(batteryLevel) : 88,
           is_sos_active: false,
           zone: evaluation.zoneName,
           zone_type: evaluation.breachType || "safe",
@@ -441,6 +441,7 @@ export function SafetyProvider({ children }) {
             lng,
             speed,
             heading,
+            battery: batteryLevel != null ? Number(batteryLevel) : w.battery || 88,
             zone: evaluation.zoneName,
             zone_type: evaluation.breachType || "safe",
             last_ping: "Just now",
@@ -452,13 +453,14 @@ export function SafetyProvider({ children }) {
       return updated;
     });
 
-    upsertWorkerLocation(workerId, lat, lng, speed, heading, false);
+    upsertWorkerLocation(workerId, lat, lng, speed, heading, false, batteryLevel);
   };
 
   // Trigger Panic / SOS Emergency
   const triggerSOS = async (workerData, customCoords = null, remarks = "Immediate Assistance Requested") => {
     const lat = customCoords?.lat || workerData?.lat || 21.815;
     const lng = customCoords?.lng || workerData?.lng || 84.02;
+    const deviceBattery = customCoords?.battery != null ? customCoords.battery : workerData?.battery != null ? workerData.battery : 88;
     const evaluation = evaluateGeofence([lat, lng], zones);
 
     const generateUUID = () => {
@@ -486,7 +488,7 @@ export function SafetyProvider({ children }) {
       latitude: lat,
       longitude: lng,
       zone_name: evaluation.zoneName,
-      battery: workerData?.battery || 88,
+      battery: deviceBattery,
       remarks,
       trigger_type: "manual_sos",
       created_at: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),

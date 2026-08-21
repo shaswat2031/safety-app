@@ -243,6 +243,15 @@ export default function WorkerPage() {
     }
   }, []);
 
+  const batteryRef = useRef(battery);
+  useEffect(() => {
+    batteryRef.current = battery;
+    const currentProfile = profileRef.current;
+    if (currentProfile?.id && updateWorkerLocationRef.current && coords) {
+      updateWorkerLocationRef.current(currentProfile.id, coords.lat, coords.lng, speed, heading, currentProfile, battery);
+    }
+  }, [battery, coords, speed, heading]);
+
   /* ── position handler ── */
   const handlePositionUpdate = useCallback(
     (pos, source = "hardware") => {
@@ -265,7 +274,7 @@ export default function WorkerPage() {
 
       const currentProfile = profileRef.current;
       if (currentProfile?.id && updateWorkerLocationRef.current) {
-        updateWorkerLocationRef.current(currentProfile.id, lat, lng, spd, hdg, currentProfile);
+        updateWorkerLocationRef.current(currentProfile.id, lat, lng, spd, hdg, currentProfile, batteryRef.current);
       }
     },
     [reverseGeocode]
@@ -379,7 +388,7 @@ export default function WorkerPage() {
         clearInterval(countdownRef.current);
         setIsActivating(false);
         setCountdown(3);
-        triggerSOS(profile, coords, "Field Worker Immediate Distress Signal");
+        triggerSOS(profile, { lat: coords.lat, lng: coords.lng, battery }, "Field Worker Immediate Distress Signal");
         toast.error("🚨 SOS BROADCASTED TO CENTRAL COMMAND!", { duration: 6000 });
       }
     }, 1000);
@@ -469,72 +478,82 @@ export default function WorkerPage() {
      RENDER
   ════════════════════════════════════════════ */
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col">
+    <div className="min-h-screen bg-slate-100 flex flex-col pb-8">
       {/* ── TOP BAR ── */}
-      <div className="bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between sticky top-0 z-40 shadow-sm">
-        <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white font-black text-sm shrink-0 shadow-sm">
+      <div className="bg-white border-b border-slate-200 px-3.5 py-2.5 flex items-center justify-between shadow-xs">
+        <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
+          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white font-black text-xs sm:text-sm shrink-0 shadow-xs">
             {profile?.full_name?.charAt(0)?.toUpperCase() || "W"}
           </div>
-          <div>
-            <div className="text-sm font-bold text-slate-900 leading-tight">
+          <div className="min-w-0">
+            <div className="text-xs sm:text-sm font-bold text-slate-900 leading-tight truncate">
               {profile?.full_name || "Worker"}
             </div>
-            <div className="text-[11px] text-slate-500 font-mono leading-tight">
+            <div className="text-[10px] sm:text-[11px] text-slate-500 font-mono leading-tight truncate">
               {profile?.employee_code || "VED-MN"} {profile?.department ? `· ${profile.department}` : ""}
             </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           {/* status badge */}
           <div
-            className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold border ${
+            className={`flex items-center gap-1 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-[10px] font-bold border ${
               isOnline
                 ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                 : "bg-amber-50 text-amber-700 border-amber-200"
             }`}
           >
-            {isOnline ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
-            {isOnline ? "Online" : "Offline"}
+            {isOnline ? <Wifi className="w-3 h-3 text-emerald-600" /> : <WifiOff className="w-3 h-3 text-amber-600" />}
+            <span>{isOnline ? "Online" : "Offline"}</span>
           </div>
 
           {/* siren mute toggle */}
           <button
             onClick={toggleSirenMute}
-            className={`p-2 rounded-xl border transition-colors ${
+            className={`p-1.5 sm:p-2 rounded-xl border transition-colors ${
               isSirenMuted
                 ? "bg-slate-100 border-slate-200 text-slate-500 hover:bg-slate-200"
                 : "bg-red-50 border-red-200 text-red-600 animate-pulse"
             }`}
             title={isSirenMuted ? "Unmute Alarm" : "Mute Alarm"}
           >
-            {isSirenMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+            {isSirenMuted ? <VolumeX className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <Volume2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
           </button>
 
           {/* profile trigger */}
           <button
             onClick={() => setShowProfile(true)}
-            className="p-2 rounded-xl bg-slate-100 border border-slate-200 text-slate-600 hover:bg-slate-200 transition-colors"
+            className="p-1.5 sm:p-2 rounded-xl bg-slate-100 border border-slate-200 text-slate-600 hover:bg-slate-200 transition-colors"
             title="My Profile"
           >
-            <User className="w-4 h-4" />
+            <User className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           </button>
         </div>
       </div>
 
       {/* ── ZONE STATUS BANNER ── */}
       <div className={`mx-3 mt-3 rounded-2xl border px-3.5 py-2.5 flex items-center gap-2.5 ${zoneColorClass}`}>
-        <span className="text-base leading-none">{zoneIcon}</span>
+        <div className="shrink-0 flex items-center justify-center">
+          {zoneStatus.breachType === "hazard" ? (
+            <ShieldAlert className="w-5 h-5 text-red-600 animate-pulse" />
+          ) : zoneStatus.breachType === "restricted" ? (
+            <AlertTriangle className="w-5 h-5 text-amber-600" />
+          ) : (
+            <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+          )}
+        </div>
         <div className="flex-1 min-w-0">
           <div className="text-xs font-black truncate">
             {zoneStatus.zoneName === "Acquiring location…" ? "Detecting Zone…" : zoneStatus.zoneName}
           </div>
-          <div className="text-[11px] opacity-80 mt-0.5 truncate font-medium">
+          <div className="text-[11px] opacity-90 mt-0.5 truncate font-medium">
             {zoneStatus.breachType === "hazard"
               ? "Hazard Area — PPE Mandatory"
               : zoneStatus.breachType === "restricted"
               ? "Restricted Access — Authorized Only"
+              : zoneStatus.zoneName === "Outside Monitored Perimeter"
+              ? "Unmonitored Sector — Exercise Vigilance"
               : "Safe Operational Zone"}
           </div>
         </div>

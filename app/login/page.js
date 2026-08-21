@@ -452,8 +452,56 @@ export default function LoginPage() {
             <p className="text-center text-[11px] text-slate-500">
               {isSignUp
                 ? "All fields marked * are mandatory for safety compliance."
-                : "You will be redirected to your role's dashboard."}
+                : "Common authentication enabled — access all 3 portals instantly."}
             </p>
+
+            {/* Quick 1-Click Access to All 3 Portals */}
+            <div className="pt-3 border-t border-slate-100 space-y-2">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 text-center">
+                Instant 1-Click Common Login
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setLoading(true);
+                    if (auth?.loginAsRole) await auth.loginAsRole("worker");
+                    setLoading(false);
+                    toast.success("Entered Worker SOS App");
+                    router.push("/worker");
+                  }}
+                  className="py-2 px-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-[11px] font-bold flex flex-col items-center gap-1 transition-all active:scale-95 cursor-pointer"
+                >
+                  <span>📱 Worker</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setLoading(true);
+                    if (auth?.loginAsRole) await auth.loginAsRole("command_operator");
+                    setLoading(false);
+                    toast.success("Entered Command Center");
+                    router.push("/command");
+                  }}
+                  className="py-2 px-2 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-xl text-[11px] font-bold flex flex-col items-center gap-1 transition-all active:scale-95 cursor-pointer"
+                >
+                  <span>🖥️ Command</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setLoading(true);
+                    if (auth?.loginAsRole) await auth.loginAsRole("response_team");
+                    setLoading(false);
+                    toast.success("Entered Response Team");
+                    router.push("/response");
+                  }}
+                  className="py-2 px-2 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-xl text-[11px] font-bold flex flex-col items-center gap-1 transition-all active:scale-95 cursor-pointer"
+                >
+                  <span>🚑 Response</span>
+                </button>
+              </div>
+            </div>
           </form>
         </div>
 

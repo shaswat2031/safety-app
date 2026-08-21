@@ -53,11 +53,7 @@ function SOSLocationMap({ alert, onReachLocation, onResolve }) {
     if (!isReached) {
       const timer = setInterval(() => {
         setProgress((prev) => {
-          if (prev >= 1) {
-            clearInterval(timer);
-            setIsReached(true);
-            onReachLocation(alert.id);
-            toast.success(`🚑 QRF Unit has arrived at ${alert.worker_name}'s exact SOS location!`);
+          if (prev >= 0.95) {
             return 1;
           }
           return prev + 0.15;
@@ -65,7 +61,18 @@ function SOSLocationMap({ alert, onReachLocation, onResolve }) {
       }, 1200);
       return () => clearInterval(timer);
     }
-  }, [alert.id, alert.worker_name, isReached, onReachLocation]);
+  }, [isReached]);
+
+  // Trigger arrival side effect when progress reaches 100%
+  useEffect(() => {
+    if (progress >= 1 && !isReached) {
+      setIsReached(true);
+      if (typeof onReachLocation === "function") {
+        onReachLocation(alert.id);
+      }
+      toast.success(`🚑 QRF Unit has arrived at ${alert.worker_name}'s exact SOS location!`);
+    }
+  }, [progress, isReached, alert.id, alert.worker_name, onReachLocation]);
 
   // Current interpolated ambulance coordinates
   const currentLng = qrfStart[0] + (targetPos[0] - qrfStart[0]) * progress;
@@ -189,16 +196,13 @@ export default function ResponsePage() {
   const { profile, role, isAuthenticated, loading: authLoading } = useAuth();
   const { sosAlerts, acknowledgeSOS, dispatchResponseTeam, resolveSOS, addAuditLog } = useSafety();
 
-  // Auth & Role Guard
+  // Auth Guard
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
       toast.error("Please login to access Response Command.");
       router.push("/login");
-    } else if (!authLoading && role === "worker") {
-      toast.error("Access restricted: Worker role cannot access Response Command.");
-      router.push("/worker");
     }
-  }, [isAuthenticated, authLoading, role, router]);
+  }, [isAuthenticated, authLoading, router]);
 
   // Active SOS Alerts Queue
   const activeEmergencies = sosAlerts.filter(

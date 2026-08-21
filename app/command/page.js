@@ -79,11 +79,8 @@ export default function CommandPage() {
     if (!authLoading && !isAuthenticated) {
       toast.error("Please login to access Command Dashboard.");
       router.push("/login");
-    } else if (!authLoading && role === "worker") {
-      toast.error("Access restricted: Workers cannot access Command Dashboard.");
-      router.push("/worker");
     }
-  }, [isAuthenticated, authLoading, role, router]);
+  }, [isAuthenticated, authLoading, router]);
 
   // UI States
   const [selectedWorker, setSelectedWorker] = useState(null);
