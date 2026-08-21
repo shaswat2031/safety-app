@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { useSafety } from "@/context/SafetyContext";
 import { evaluateGeofence } from "@/lib/geofence";
+import WorkerFeedbackModal from "@/components/WorkerFeedbackModal";
 import {
   ShieldAlert,
   AlertOctagon,
@@ -34,6 +35,8 @@ import {
   RefreshCw,
   ChevronRight,
   Info,
+  Star,
+  Award,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -109,11 +112,13 @@ export default function WorkerPage() {
     resolveSOS,
     reportIncident,
     sosAlerts,
+    incidents,
     zones,
     updateWorkerLocation,
     isSirenMuted,
     toggleSirenMute,
     isOnline,
+    resolutionFeedback,
   } = useSafety();
 
   /* auth guard */
@@ -127,6 +132,8 @@ export default function WorkerPage() {
   /* ── state ── */
   const [countdown, setCountdown] = useState(3);
   const [isActivating, setIsActivating] = useState(false);
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [feedbackTargetItem, setFeedbackTargetItem] = useState(null);
   const countdownRef = useRef(null);
 
   /* default site coords fallback */
@@ -840,6 +847,36 @@ export default function WorkerPage() {
                   </div>
                 </a>
               )}
+            </div>
+
+            {/* ── RESOLUTION FEEDBACK CARD FOR WORKERS ── */}
+            <div className="mx-3 mb-3 bg-gradient-to-r from-emerald-900 via-teal-900 to-slate-900 text-white rounded-2xl p-4 shadow-lg border border-emerald-700/60 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Award className="w-5 h-5 text-amber-400 animate-bounce" />
+                  <h3 className="text-xs font-black uppercase tracking-wider text-white">
+                    Emergency Resolution Feedback
+                  </h3>
+                </div>
+                <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold text-[10px] border border-emerald-500/30">
+                  EHS SERVICE
+                </span>
+              </div>
+
+              <p className="text-xs text-emerald-100 font-medium">
+                Help EHS & Command Center improve QRF response quality by rating emergency resolution performance.
+              </p>
+
+              <button
+                onClick={() => {
+                  setFeedbackTargetItem(sosAlerts.find(a => a.status === 'resolved') || { id: "sos-latest", remarks: "Emergency Rescue Operation" });
+                  setShowFeedbackModal(true);
+                }}
+                className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs rounded-xl shadow-md flex items-center justify-center gap-2 transition-transform transform hover:scale-[1.02] cursor-pointer"
+              >
+                <Star className="w-4 h-4 fill-slate-950" />
+                <span>Rate QRF Emergency Resolution</span>
+              </button>
             </div>
 
             <div className="px-4 pb-5">

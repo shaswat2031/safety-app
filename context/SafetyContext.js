@@ -18,6 +18,8 @@ import {
   fetchWorkerLocations,
   fetchAuditLogs,
   insertAuditLog,
+  fetchChatMessages,
+  insertChatMessage,
 } from "@/lib/supabaseService";
 
 const SafetyContext = createContext(null);
@@ -29,6 +31,9 @@ const STORAGE_KEYS = {
   INCIDENTS: "vedanta_safety_incidents_v4",
   LOGS: "vedanta_safety_logs_v4",
   OFFLINE_QUEUE: "vedanta_safety_offline_queue_v4",
+  CHAT: "vedanta_safety_chat_v4",
+  QRF_ALERTS: "vedanta_safety_qrf_alerts_v4",
+  FEEDBACK: "vedanta_safety_feedback_v4",
 };
 
 export function SafetyProvider({ children }) {
@@ -185,11 +190,43 @@ export function SafetyProvider({ children }) {
     },
   ];
 
+  const DEFAULT_CHAT = [];
+
+  const DEFAULT_QRF_ALERTS = [
+    {
+      id: "qrf-alert-1",
+      title: "CRITICAL EMERGENCY DISPATCH",
+      message: "Panic SOS reported in Industrial Site Area (Sector 69). Worker Code: VED-MN-4092.",
+      level: "critical",
+      location: "Industrial Site Area",
+      target_unit: "QRF Ambulance Alpha",
+      created_at: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
+      acknowledged: true,
+    },
+  ];
+
+  const DEFAULT_FEEDBACK = [
+    {
+      id: "fb-1",
+      sos_id: "inc-demo-1",
+      worker_id: "w-101",
+      worker_name: "Field Worker",
+      rating: 5,
+      satisfaction: "Excellent",
+      comments: "QRF Ambulance Alpha arrived within 3 minutes of SOS trigger. Immediate medical aid was provided. Very professional response!",
+      tags: ["Fast Response ⚡", "Medical Care 🩺", "Clear Guidance 📢"],
+      created_at: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
+    },
+  ];
+
   const [zones, setZones] = useState(DEFAULT_ZONES);
   const [workers, setWorkers] = useState(DEFAULT_WORKERS);
   const [responders, setResponders] = useState(DEFAULT_RESPONDERS);
   const [sosAlerts, setSosAlerts] = useState([]);
   const [incidents, setIncidents] = useState(DEFAULT_INCIDENTS);
+  const [chatMessages, setChatMessages] = useState(DEFAULT_CHAT);
+  const [qrfAlerts, setQrfAlerts] = useState(DEFAULT_QRF_ALERTS);
+  const [resolutionFeedback, setResolutionFeedback] = useState(DEFAULT_FEEDBACK);
   const [isSirenMuted, setIsSirenMuted] = useState(true); // Siren sound starts OFF
   const [isOnline, setIsOnline] = useState(true);
   const [offlineQueue, setOfflineQueue] = useState([]);
@@ -205,6 +242,46 @@ export function SafetyProvider({ children }) {
         console.warn("Storage error:", e);
       }
     }
+  }, []);
+
+  // Instant Sub-Millisecond Cross-Tab Realtime Synchronization
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    // Load initial local storage overrides if present
+    try {
+      const savedChat = localStorage.getItem(STORAGE_KEYS.CHAT);
+      if (savedChat) {
+        const parsedChat = JSON.parse(savedChat);
+        const filteredReal = Array.isArray(parsedChat) ? parsedChat.filter((m) => !["msg-1", "msg-2", "msg-3", "msg-4"].includes(m.id)) : [];
+        setChatMessages(filteredReal);
+      }
+
+      const savedQrfAlerts = localStorage.getItem(STORAGE_KEYS.QRF_ALERTS);
+      if (savedQrfAlerts) setQrfAlerts(JSON.parse(savedQrfAlerts));
+
+      const savedFeedback = localStorage.getItem(STORAGE_KEYS.FEEDBACK);
+      if (savedFeedback) setResolutionFeedback(JSON.parse(savedFeedback));
+    } catch (e) {}
+
+    const handleStorageSync = (e) => {
+      if (!e.newValue) return;
+      try {
+        const parsed = JSON.parse(e.newValue);
+        if (e.key === STORAGE_KEYS.CHAT) {
+          setChatMessages(parsed);
+        } else if (e.key === STORAGE_KEYS.QRF_ALERTS) {
+          setQrfAlerts(parsed);
+        } else if (e.key === STORAGE_KEYS.SOS) {
+          setSosAlerts(parsed);
+        } else if (e.key === STORAGE_KEYS.FEEDBACK) {
+          setResolutionFeedback(parsed);
+        }
+      } catch (err) {}
+    };
+
+    window.addEventListener("storage", handleStorageSync);
+    return () => window.removeEventListener("storage", handleStorageSync);
   }, []);
 
   const addAuditLog = useCallback((event, type, details) => {
@@ -370,6 +447,44 @@ export function SafetyProvider({ children }) {
         }));
         setAuditLogs(formattedLogs);
         saveState(STORAGE_KEYS.LOGS, formattedLogs);
+      }
+
+      // 6. Fetch Real Supabase 2-Way Chat Messages
+      const dbChats = await fetchChatMessages();
+      if (Array.isArray(dbChats)) {
+        const formattedChats = dbChats.map((c) => ({
+          id: c.id,
+          sender_role: c.sender_role || "command",
+          sender_name: c.sender_name || "Operator",
+          message: c.message,
+          preset_type: c.preset_type || "normal",
+          timestamp: c.timestamp || new Date(c.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          created_at: c.created_at,
+        }));
+
+        setChatMessages((prev) => {
+          const map = new Map();
+
+          // 1. Add DB records first
+          formattedChats.forEach((item) => {
+            const compositeKey = `${item.sender_name}::${item.message}::${item.timestamp}`;
+            map.set(item.id, item);
+            map.set(compositeKey, item);
+          });
+
+          // 2. Add local pending messages only if not matched by composite key or ID
+          prev.forEach((item) => {
+            const compositeKey = `${item.sender_name}::${item.message}::${item.timestamp}`;
+            if (!map.has(item.id) && !map.has(compositeKey)) {
+              map.set(item.id, item);
+            }
+          });
+
+          const merged = Array.from(new Set(map.values()));
+          merged.sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
+          saveState(STORAGE_KEYS.CHAT, merged);
+          return merged;
+        });
       }
     } catch (err) {
       console.warn("Supabase fetch notice:", err);
@@ -765,6 +880,114 @@ export function SafetyProvider({ children }) {
     setIsSirenMuted(isMutedNow);
   };
 
+  // 2-Way Chat Messaging (Command Center <-> QRF)
+  const sendChatMessage = (msgData) => {
+    const tempId = `msg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    const newMsg = {
+      id: tempId,
+      sender_role: msgData.sender_role || "command",
+      sender_name: msgData.sender_name || (msgData.sender_role === "qrf" ? "QRF Unit" : "Command Chief"),
+      message: msgData.message || "",
+      emergency_id: msgData.emergency_id || null,
+      preset_type: msgData.preset_type || "normal",
+      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      created_at: new Date().toISOString(),
+    };
+
+    setChatMessages((prev) => {
+      const updated = [...prev, newMsg];
+      saveState(STORAGE_KEYS.CHAT, updated);
+      return updated;
+    });
+
+    // Store directly in Supabase Database Table 'chat_messages' and update local ID
+    insertChatMessage(newMsg).then((saved) => {
+      if (saved && saved.id) {
+        setChatMessages((prev) => {
+          const updated = prev.map((m) =>
+            m.id === tempId ? { ...m, id: saved.id, created_at: saved.created_at || m.created_at } : m
+          );
+          saveState(STORAGE_KEYS.CHAT, updated);
+          return updated;
+        });
+      }
+    });
+
+    addAuditLog(
+      "CHAT_MESSAGE_SENT",
+      "info",
+      `[${newMsg.sender_role.toUpperCase()}] ${newMsg.sender_name}: "${newMsg.message.substring(0, 40)}..."`
+    );
+
+    return newMsg;
+  };
+
+  // Direct Alert to QRF
+  const sendQrfAlert = (alertData) => {
+    const newQrfAlert = {
+      id: `qrf-alert-${Date.now()}`,
+      title: alertData.title || "URGENT QRF DISPATCH ALERT",
+      message: alertData.message || "Immediate response requested by Command Center.",
+      level: alertData.level || "critical",
+      location: alertData.location || "Industrial Site Area",
+      target_unit: alertData.target_unit || "All QRF Units",
+      created_at: new Date().toISOString(),
+      acknowledged: false,
+    };
+
+    setQrfAlerts((prev) => {
+      const updated = [newQrfAlert, ...prev];
+      saveState(STORAGE_KEYS.QRF_ALERTS, updated);
+      return updated;
+    });
+
+    addAuditLog(
+      "QRF_ALERT_DISPATCHED",
+      "critical",
+      `Direct QRF Broadcast: "${newQrfAlert.title}" sent to ${newQrfAlert.target_unit}`
+    );
+
+    return newQrfAlert;
+  };
+
+  const acknowledgeQrfAlert = (alertId) => {
+    setQrfAlerts((prev) => {
+      const updated = prev.map((a) => (a.id === alertId ? { ...a, acknowledged: true } : a));
+      saveState(STORAGE_KEYS.QRF_ALERTS, updated);
+      return updated;
+    });
+  };
+
+  // Worker Resolution Feedback
+  const submitResolutionFeedback = (feedbackData) => {
+    const newFb = {
+      id: `fb-${Date.now()}`,
+      sos_id: feedbackData.sos_id || null,
+      incident_id: feedbackData.incident_id || null,
+      worker_id: feedbackData.worker_id || "w-101",
+      worker_name: feedbackData.worker_name || "Field Worker",
+      rating: feedbackData.rating || 5,
+      satisfaction: feedbackData.satisfaction || "Excellent",
+      comments: feedbackData.comments || "",
+      tags: feedbackData.tags || [],
+      created_at: new Date().toISOString(),
+    };
+
+    setResolutionFeedback((prev) => {
+      const updated = [newFb, ...prev];
+      saveState(STORAGE_KEYS.FEEDBACK, updated);
+      return updated;
+    });
+
+    addAuditLog(
+      "RESOLUTION_FEEDBACK_SUBMITTED",
+      "success",
+      `Worker ${newFb.worker_name} submitted ${newFb.rating}-star resolution feedback: "${newFb.satisfaction}"`
+    );
+
+    return newFb;
+  };
+
   return (
     <SafetyContext.Provider
       value={{
@@ -774,6 +997,9 @@ export function SafetyProvider({ children }) {
         sosAlerts,
         incidents,
         auditLogs,
+        chatMessages,
+        qrfAlerts,
+        resolutionFeedback,
         isSirenMuted,
         isOnline,
         offlineQueue,
@@ -792,6 +1018,10 @@ export function SafetyProvider({ children }) {
         triggerEquipmentShutdown,
         resetEquipmentShutdown,
         addAuditLog,
+        sendChatMessage,
+        sendQrfAlert,
+        acknowledgeQrfAlert,
+        submitResolutionFeedback,
       }}
     >
       {children}

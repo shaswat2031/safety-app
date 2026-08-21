@@ -26,7 +26,10 @@ import {
   Building2,
   Activity,
   Wifi,
+  Radio,
 } from "lucide-react";
+import QrfAlertBanner from "@/components/QrfAlertBanner";
+import TwoWayChat from "@/components/TwoWayChat";
 import { fetchRealRoadRoute } from "@/lib/routingService";
 import { toast } from "sonner";
 
@@ -298,11 +301,12 @@ export default function ResponsePage() {
               ? "bg-red-500/20 text-red-300 border-red-500/30"
               : "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
           }`}>
-            <span className={`w-2 h-2 rounded-full ${activeEmergencies.length > 0 ? "bg-red-500 animate-ping" : "bg-emerald-400 animate-pulse"}`}></span>
-            {activeEmergencies.length} Active Emergency{activeEmergencies.length !== 1 ? "s" : ""}
           </span>
         </div>
       </div>
+
+      {/* High Priority QRF Dispatch Banner */}
+      <QrfAlertBanner />
 
       {/* Main Content Area */}
       {activeEmergencies.length === 0 ? (
@@ -446,6 +450,18 @@ export default function ResponsePage() {
         </div>
       )}
 
+      {/* Dedicated QRF ↔ Command Center 2-Way Radio Chat */}
+      <div className="space-y-3 pt-2 pb-24 sm:pb-12">
+        <div className="flex items-center gap-2">
+          <span className="p-1.5 rounded-lg bg-indigo-100 text-indigo-700">
+            <Radio className="w-4 h-4 animate-pulse text-indigo-600" />
+          </span>
+          <h3 className="text-sm font-black text-slate-900 tracking-tight">
+            Live Command ↔ QRF 2-Way Tactical Chat
+          </h3>
+        </div>
+        <TwoWayChat currentRole="qrf" currentUserName={profile?.full_name || "QRF Ambulance Squad Leader"} />
+      </div>
     </div>
   );
 }
